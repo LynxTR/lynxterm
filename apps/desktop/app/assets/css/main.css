@@ -1,0 +1,80 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+/* Shell prompt icons (Starship, powerlevel10k), v3.5.1 from github.com/ryanoasis/nerd-fonts.
+   Icon code points only: never replaces regular text. */
+@font-face {
+  font-family: "Symbols Nerd Font Mono";
+  src: url("~/assets/fonts/SymbolsNerdFontMono-Regular.ttf") format("truetype");
+  unicode-range: U+23FB-23FE, U+2665, U+26A1, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
+}
+
+/* Command block headers (SshTerminal): full terminal width, not columns at block start. */
+.xterm .lt-block {
+  width: 100% !important;
+}
+
+@theme {
+  --font-sans: system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --color-sunken: #0e1014; /* list columns, bars, section cards */
+  --color-row: #15191f; /* hovered or selected list row */
+}
+
+/* Type scale; no ad-hoc text-[Npx] per view. */
+@utility t-title {
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+@utility t-section {
+  font-size: 15px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+@utility t-label {
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-text-dimmed);
+}
+
+/* Section card and detail pane beside a list column. */
+@utility card {
+  @apply rounded-[10px] border border-default bg-sunken;
+}
+@utility pane {
+  @apply flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-7 pt-5 pb-7;
+}
+
+/* Design palette on Nuxt UI tokens, so every component picks it up. Dark-only app. */
+.dark {
+  --ui-primary: #ffb020;
+  --ui-success: #3ddc97;
+  --ui-info: #6cb6ff;
+  --ui-warning: #ffb020;
+  --ui-error: #ff8a8a;
+
+  --ui-bg: #0b0d10; /* ground, terminal */
+  --ui-bg-muted: #111419; /* panels, sidebar, cards */
+  --ui-bg-elevated: #171b21; /* tiles, menus, modals */
+  --ui-bg-accented: #1e232b; /* selected rows */
+
+  /* hairlines between areas, around cards; controls use accented */
+  --ui-border: #1e232b;
+  --ui-border-muted: #171b21;
+  --ui-border-accented: #2a3039;
+
+  --ui-text-dimmed: #6b7480;
+  --ui-text-muted: #8b95a1;
+  --ui-text-toned: #b4bcc6;
+  --ui-text: #e6e9ee;
+  --ui-text-highlighted: #f4f5f7;
+  --ui-text-inverted: #1a1200; /* on amber */
+
+  --ui-radius: 0.3333rem; /* rounded-md = 8px */
+  --ui-header-height: 3.5rem; /* dashboard navbars and sidebar header */
+}

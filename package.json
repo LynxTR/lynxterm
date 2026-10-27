@@ -1,0 +1,13 @@
+{
+  "name": "lynxterm",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vp test run",
+    "fmt": "vp fmt",
+    "lint": "vp lint"
+  },
+  "devDependencies": {
+    "vite-plus": "^1.2.0"
+  }
+}

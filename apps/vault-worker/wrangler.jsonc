@@ -1,0 +1,11 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lynxterm-vault",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  // No database_id: Deploy button (or `wrangler deploy`) creates database.
+  // Worker creates tables on first request.
+  "d1_databases": [{ "binding": "DB", "database_name": "lynxterm" }],
+  // Keeps dashboard variables, like NEW_DEVICES = off, on redeploy.
+  "keep_vars": true,
+}

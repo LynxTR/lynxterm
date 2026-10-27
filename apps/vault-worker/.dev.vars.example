@@ -1,0 +1,3 @@
+# Any long random string. First device needs it once to create vault;
+# after that Worker refuses every other enrolment.
+ENROLL_TOKEN=change-me-to-something-long-and-random
