@@ -1,6 +1,6 @@
 [package]
 name = "lynxterm"
-version = "0.1.0"
+version = "0.1.1"
 description = "Open-source SSH client with a self-hosted, end-to-end encrypted vault"
 license = "MIT"
 edition = "2024"

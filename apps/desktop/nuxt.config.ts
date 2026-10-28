@@ -9,5 +9,13 @@ export default defineNuxtConfig({
     provider: "none",
   },
   ignore: ["**/src-tauri/**"],
+  vite: {
+    build: {
+      // Fig specs (aws, gcloud, az up to ~4 MB) load lazily from local files per command.
+      chunkSizeWarningLimit: 5000,
+      // Build-speed note, not an output problem.
+      rolldownOptions: { checks: { bundlerTimings: false } },
+    },
+  },
   compatibilityDate: "2026-10-01",
 });

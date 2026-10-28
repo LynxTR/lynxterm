@@ -25,15 +25,15 @@ jobs:
           - platform: windows-latest
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         with:
           version: 11.17.0
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
-          node-version: 24
+          node-version-file: .nvmrc # current Node LTS
           cache: pnpm
 
       - uses: dtolnay/rust-toolchain@stable
@@ -44,6 +44,7 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: apps/desktop/src-tauri -> target
+          key: ${{ strategy.job-index }} # both Mac jobs run on the same runner type: own cache each
 
       - name: Linux build dependencies
         if: startsWith(matrix.platform, 'ubuntu')
@@ -62,4 +63,5 @@ jobs:
           releaseName: Lynxterm ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseBody: Download the installer for your system from the files below.
           releaseDraft: true
+          includeUpdaterJson: false # no Tauri updater
           args: ${{ matrix.args }}

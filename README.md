@@ -18,6 +18,11 @@ An open-source SSH client with an encrypted vault that syncs through a Cloudflar
 
 Get the installer for your system from [Releases](https://github.com/LynxTR/lynxterm/releases).
 
+The macOS and Windows builds aren't signed with a paid certificate yet, so the first launch shows a warning:
+
+- macOS: open System Settings -> Privacy & Security and click Open Anyway. If macOS says the app is damaged, run `xattr -cr /Applications/Lynxterm.app` once.
+- Windows: on the SmartScreen prompt, click More info, then Run anyway.
+
 ## Sync
 
 Sync runs through a Worker with a D1 database that you deploy to your own Cloudflare account. In the app, open Settings -> Sync, copy the enrolment token, deploy, and paste the Worker's URL. Other devices join with the URL and your master password.
