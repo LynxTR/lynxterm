@@ -77,6 +77,7 @@ fn main() {
             hosts::hosts_list,
             hosts::host_save,
             hosts::host_password_save,
+            hosts::host_password_reveal,
             groups::groups_list,
             groups::group_save,
             snippets::snippets_list,

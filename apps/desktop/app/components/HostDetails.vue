@@ -34,9 +34,42 @@ const status = computed(() => {
   return { label: "connecting", tone: "" };
 });
 
-function forgetPassword() {
+async function forgetPassword() {
   const { host, port, user } = props.host;
-  invoke("host_password_save", { host, port, user, password: "" }).then(useHosts().refresh);
+  const ok = await askConfirm({
+    title: `Forget the password for ${hostName(props.host)}?`,
+    description:
+      "Removes it here and on your synced devices. The next connection asks for it again.",
+    detail: hostLabel(props.host),
+    label: "Forget",
+  });
+  if (!ok) return;
+  shown.value = "";
+  await invoke("host_password_save", { host, port, user, password: "" });
+  await useHosts().refresh();
+}
+
+// Master password first, like key export. Hidden again on eye or other host.
+const revealOpen = ref(false);
+const master = ref("");
+const shown = ref("");
+const revealing = ref(false);
+watch(
+  () => props.host.id,
+  () => (shown.value = ""),
+);
+async function revealPassword() {
+  const { host, port, user } = props.host;
+  await withBusy(revealing, async () => {
+    shown.value = await invoke<string>("host_password_reveal", {
+      host,
+      port,
+      user,
+      master: master.value,
+    });
+    revealOpen.value = false;
+  });
+  master.value = "";
 }
 
 const keyName = computed(() => keys.value.find((k) => k.id === props.host.keyId)?.name);
@@ -80,7 +113,8 @@ function when(at: number) {
   <main class="pane max-w-[860px]">
     <header class="flex flex-wrap items-center gap-3.5">
       <HostLogo :os="host.os" />
-      <div class="min-w-0 flex-1">
+      <!-- basis: buttons wrap below before name squeezes -->
+      <div class="min-w-0 grow basis-56">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="t-heading truncate">{{ hostName(host) }}</h2>
           <HostChip v-if="host.group" :label="host.group" :group="host.group" />
@@ -137,17 +171,49 @@ function when(at: number) {
           <dd class="truncate font-mono text-xs">{{ hostLabel(host) }}</dd>
           <dt class="text-muted">Sign in with</dt>
           <dd v-if="keyName">Key {{ keyName }}</dd>
-          <dd v-else-if="host.savedPassword" class="flex items-center gap-2">
-            Password, saved
-            <UButton
-              label="Forget"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              class="-my-1"
-              @click="forgetPassword"
-            />
-          </dd>
+          <!-- field gets own full-width row, dd column too narrow -->
+          <template v-else-if="host.savedPassword">
+            <dd>Saved password</dd>
+            <dd class="col-span-2">
+              <UInput
+                :model-value="shown || 'password'"
+                :type="shown ? 'text' : 'password'"
+                readonly
+                size="sm"
+                aria-label="Saved password"
+                class="w-full"
+                :ui="{ base: shown ? 'pe-21 font-mono' : 'pe-15 font-mono', trailing: 'pe-1' }"
+              >
+                <template #trailing>
+                  <UButton
+                    v-if="shown"
+                    icon="i-ph-copy-duotone"
+                    size="xs"
+                    color="neutral"
+                    variant="link"
+                    aria-label="Copy password"
+                    @click="copyText(shown, 'Password copied')"
+                  />
+                  <UButton
+                    :icon="shown ? 'i-ph-eye-slash-duotone' : 'i-ph-eye-duotone'"
+                    size="xs"
+                    color="neutral"
+                    variant="link"
+                    :aria-label="shown ? 'Hide password' : 'Show password'"
+                    @click="shown ? (shown = '') : ((revealOpen = true), (master = ''))"
+                  />
+                  <UButton
+                    icon="i-ph-trash-duotone"
+                    size="xs"
+                    color="neutral"
+                    variant="link"
+                    aria-label="Forget password"
+                    @click="forgetPassword"
+                  />
+                </template>
+              </UInput>
+            </dd>
+          </template>
           <dd v-else>Password, asked each time</dd>
           <template v-if="host.os">
             <dt class="text-muted">System</dt>
@@ -226,5 +292,23 @@ function when(at: number) {
         </li>
       </ol>
     </section>
+
+    <UModal v-model:open="revealOpen" :title="`Show password for ${hostName(host)}`">
+      <template #body>
+        <form id="reveal-form" class="flex flex-col gap-3" @submit.prevent="revealPassword">
+          <p class="text-sm text-muted">
+            Enter your master password to see the saved password for
+            <span class="font-mono">{{ hostLabel(host) }}</span
+            >.
+          </p>
+          <UFormField label="Master password">
+            <UInput v-model="master" type="password" required autofocus class="w-full" />
+          </UFormField>
+        </form>
+      </template>
+      <template #footer>
+        <UButton type="submit" form="reveal-form" label="Show" :loading="revealing" />
+      </template>
+    </UModal>
   </main>
 </template>

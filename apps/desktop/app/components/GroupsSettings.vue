@@ -247,7 +247,7 @@ async function forgetTag(t: { name: string; hosts: number }) {
         {{ tags.length ? "No tag matches." : "No tags yet." }}
       </p>
       <p class="text-xs text-muted">
-        Add tags in the host editor: type one and press Enter. Tags are lowercase, with dashes for
+        Add tags in the host editor: pick one or type a new one. Tags are lowercase, with dashes for
         spaces. Renaming a tag to one that exists merges them.
       </p>
     </section>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const { hosts, save, remove } = useHosts();
 const { keys } = useKeys();
-const { names: groups, ensure: ensureGroup } = useGroups();
+const { names: groups, tags, ensure: ensureGroup } = useGroups();
 const { connect, openFiles } = useSessions();
 const settings = useSettings();
 const toast = useToast();
@@ -115,6 +115,14 @@ const editingTags = computed({
   set: (v: string[]) =>
     editing.value && (editing.value.tags = [...new Set(v.map(normalizeTag).filter(Boolean))]),
 });
+const tagItems = computed(() =>
+  [...new Set([...tags.value.map((t) => t.name), ...editingTags.value])].sort(),
+);
+const tagSearch = ref("");
+function addTag(name: string) {
+  editingTags.value = [...editingTags.value, name];
+  tagSearch.value = "";
+}
 function newHost() {
   watchNew.value = true;
   editing.value = {
@@ -331,12 +339,17 @@ const hostMenu = (h: SavedHost) => [
             />
           </UFormField>
         </div>
-        <UFormField label="Tags" hint="Enter after each">
-          <UInputTags
+        <UFormField label="Tags" hint="Optional">
+          <USelectMenu
             v-model="editingTags"
-            placeholder="Add a tag"
+            v-model:search-term="tagSearch"
+            :items="tagItems"
+            multiple
+            create-item
+            clear
+            placeholder="No tags"
             class="w-full"
-            :ui="{ item: 'font-mono' }"
+            @create="addTag"
           />
         </UFormField>
         <UFormField label="Sign in with">
