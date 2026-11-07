@@ -81,9 +81,9 @@ async function forget() {
       </template>
     </ListColumn>
 
-    <main v-if="selected" class="pane max-w-[760px]">
+    <main v-if="selected" :key="selectedKey ?? undefined" class="pane max-w-[760px]">
       <div class="flex flex-wrap items-center gap-3">
-        <h2 class="min-w-0 font-mono text-xl font-semibold break-all">{{ name(selected) }}</h2>
+        <h2 class="t-heading min-w-0 font-mono break-all">{{ name(selected) }}</h2>
         <UBadge :label="keyAlgorithm(selected.algorithm)" class="font-mono" />
         <div class="ml-auto flex gap-2">
           <UButton
@@ -135,7 +135,7 @@ async function forget() {
         </div>
       </div>
 
-      <p class="flex items-center gap-2 text-sm text-muted">
+      <p class="hint">
         <UIcon name="i-ph-info-duotone" class="size-[18px]" />
         Read from ~/.ssh/known_hosts on this machine; not synced. "no host" means no saved host in
         Lynxterm uses that address.

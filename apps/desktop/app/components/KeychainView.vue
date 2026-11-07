@@ -130,18 +130,6 @@ const keySync = computed(() => {
   return k.dirty || !k.rev ? "waiting" : "synced";
 });
 const lastSync = computed(() => (sync.ago.value === "not yet" ? "" : sync.ago.value));
-const backup = computed(
-  () =>
-    ({
-      local: { chip: "this device", text: "Set up Sync to back it up" },
-      off: { chip: "this device", text: "Hosts and keys is off in Sync settings" },
-      waiting: { chip: "waiting", text: `Syncs to ${sync.host.value} next` },
-      synced: {
-        chip: "synced",
-        text: `Encrypted in your vault${lastSync.value && `, last ${lastSync.value}`}`,
-      },
-    })[keySync.value],
-);
 
 // Trail built from vault and sync state; no stored log.
 const date = (secs: number) =>
@@ -210,9 +198,9 @@ const importKey = () =>
       </template>
     </ListColumn>
 
-    <main v-if="selected" class="pane max-w-[760px]">
+    <main v-if="selected" :key="selected.id" class="pane max-w-[760px]">
       <div class="flex flex-wrap items-center gap-3">
-        <h2 class="text-xl font-semibold">{{ selected.name }}</h2>
+        <h2 class="t-heading">{{ selected.name }}</h2>
         <UBadge
           :label="keyAlgorithm(selected.algorithm).toLowerCase()"
           size="sm"
@@ -246,11 +234,6 @@ const importKey = () =>
           <dd>{{ origin(selected.origin) }}</dd>
           <dt class="text-muted">Private key</dt>
           <dd>Encrypted in your vault, decrypted only inside the Rust core while connecting</dd>
-          <dt class="text-muted">Backup</dt>
-          <dd class="flex flex-wrap items-center gap-2">
-            <UBadge :label="backup.chip" size="sm" class="font-mono" />
-            <span class="text-muted">{{ backup.text }}</span>
-          </dd>
         </dl>
       </div>
 
@@ -357,12 +340,10 @@ const importKey = () =>
         </form>
       </template>
       <template #footer>
-        <div class="flex w-full items-center justify-between gap-2">
-          <span class="text-xs text-dimmed"
-            >Stored encrypted in your vault, without the passphrase.</span
-          >
-          <UButton type="submit" form="import-form" label="Import" :loading="importing" />
-        </div>
+        <span class="mr-auto text-xs text-dimmed"
+          >Stored encrypted in your vault, without the passphrase.</span
+        >
+        <UButton type="submit" form="import-form" label="Import" :loading="importing" />
       </template>
     </UModal>
 

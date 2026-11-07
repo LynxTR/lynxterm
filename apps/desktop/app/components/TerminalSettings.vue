@@ -8,13 +8,13 @@ const toast = useToast();
 
 const installed = (h: SavedHost) => settings.integratedHosts.includes(hostKey(h));
 
-// Keyless hosts: password asked inline, never kept.
+// Password asked inline, not kept.
 const asking = ref<{ id: string; remove: boolean } | null>(null);
 const password = ref("");
 const busy = ref("");
 
 async function integrate(h: SavedHost, remove: boolean) {
-  if (!h.keyId && asking.value?.id !== h.id) {
+  if (asksPassword(h) && asking.value?.id !== h.id) {
     asking.value = { id: h.id!, remove };
     password.value = "";
     return;
@@ -64,10 +64,14 @@ const entries = computed(() =>
 const total = computed(() => entries.value.reduce((n, e) => n + e.commands.length, 0));
 const open = ref("");
 
-const confirmPurge = ref<string | null>(null); // host key, or "" for all
-async function purge(key: string) {
-  if (confirmPurge.value !== key) return (confirmPurge.value = key);
-  confirmPurge.value = null;
+/** "" = all hosts */
+async function purge(key: string, name = "") {
+  const ok = await askConfirm({
+    title: key ? `Purge history for ${name}?` : "Purge all command history?",
+    description: "Removes the saved commands here and on your synced devices.",
+    label: "Purge",
+  });
+  if (!ok) return;
   if (open.value === key || !key) open.value = "";
   await history.purge(key || undefined);
   toast.add({
@@ -81,22 +85,47 @@ async function purge(key: string) {
   <div class="flex flex-col gap-6">
     <h2 class="t-title">Terminal</h2>
 
-    <div class="flex max-w-3xl flex-col gap-4 card p-4">
+    <div class="box gap-4 p-4">
       <USwitch
         v-model="settings.history"
         label="Learn from command history"
         description="Commands you run feed the grey → suggestions, per host. Stored encrypted in your vault and synced. Lines starting with a space and password prompts are never saved."
       />
+      <URadioGroup
+        v-model="settings.terminalStyle"
+        legend="Terminal style"
+        description="Blocks and Plain type a short hidden setup line into each new bash or zsh session once it sees a shell prompt, never at a password or other login question; nothing is saved on the server. Applies to new terminals."
+        orientation="horizontal"
+        variant="card"
+        :items="[
+          {
+            label: 'Blocks',
+            value: 'blocks',
+            description:
+              'Each finished command becomes its own card with folder, git branch, exit status and time.',
+          },
+          {
+            label: 'Plain',
+            value: 'plain',
+            description: 'One continuous terminal, like any other. Suggestions still work.',
+          },
+          {
+            label: 'Raw',
+            value: 'raw',
+            description: 'Plain, with no setup line. Suggestions follow only what you type.',
+          },
+        ]"
+      />
       <USwitch
-        v-model="settings.blocks"
-        label="Command blocks"
-        description="Separates each command with a header showing the folder, git branch, exit status and how long it took. Lynxterm types a short hidden setup line into each new bash or zsh session; nothing is saved on the server. Applies to new terminals."
+        v-model="settings.localEcho"
+        label="Show typing before the server answers"
+        description="On a slow connection, what you type appears grey right away and turns normal once the server echoes it. Never at password prompts or in full-screen apps like vim."
       />
     </div>
 
-    <div class="flex max-w-3xl flex-col card">
+    <div class="box">
       <div class="flex flex-col gap-1.5 border-b border-default p-4">
-        <h3 class="text-[15px] font-semibold">Shell integration</h3>
+        <h3 class="t-section">Shell integration</h3>
         <p class="text-sm text-muted">
           Adds a small block to <code class="font-mono text-xs">~/.bashrc</code> and
           <code class="font-mono text-xs">~/.zshrc</code> on the server. It marks where your prompt
@@ -174,10 +203,10 @@ async function purge(key: string) {
       </ul>
     </div>
 
-    <div class="flex max-w-3xl flex-col card">
+    <div class="box">
       <div class="flex flex-wrap items-center gap-3 border-b border-default p-4">
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h3 class="text-[15px] font-semibold">Command history</h3>
+          <h3 class="t-section">Command history</h3>
           <p class="text-sm text-muted">
             {{ total }} {{ total === 1 ? "command" : "commands" }} across {{ entries.length }}
             {{ entries.length === 1 ? "host" : "hosts" }}
@@ -187,9 +216,9 @@ async function purge(key: string) {
         <UButton
           v-if="entries.length"
           icon="i-ph-trash-duotone"
-          :label="confirmPurge === '' ? 'Purge everywhere?' : 'Purge all'"
+          label="Purge all"
           color="error"
-          :variant="confirmPurge === '' ? 'solid' : 'outline'"
+          variant="outline"
           size="sm"
           @click="purge('')"
         />
@@ -215,10 +244,9 @@ async function purge(key: string) {
               icon="i-ph-trash-duotone"
               size="xs"
               color="error"
-              :variant="confirmPurge === e.key ? 'solid' : 'ghost'"
-              :label="confirmPurge === e.key ? 'Purge?' : undefined"
+              variant="ghost"
               :aria-label="`Purge history for ${e.name}`"
-              @click="purge(e.key)"
+              @click="purge(e.key, e.name)"
             />
           </div>
           <ol
@@ -238,7 +266,7 @@ async function purge(key: string) {
       </ul>
     </div>
 
-    <p class="flex items-center gap-2 text-sm text-muted">
+    <p class="hint">
       <UIcon name="i-ph-info-duotone" class="size-[18px]" />
       Purging syncs to every device. Installed status is what this device has seen.
     </p>

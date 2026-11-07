@@ -33,47 +33,6 @@ export default defineNuxtPlugin(() => {
   const vault = params.get("vault");
   const firstRun = vault === "none";
   let signedOut = params.has("signedOut");
-  // ?groups=5,4,3: groups of those sizes replace sample hosts; &ungrouped=2 adds ungrouped
-  // ones. Checks how Hosts grid fits them.
-  const sizes = params
-    .get("groups")
-    ?.split(",")
-    .map(Number)
-    .filter((n) => n > 0);
-  const palette = [
-    ["production", "#ff8a8a"],
-    ["staging", "#6cb6ff"],
-    ["homelab", "#2dd4bf"],
-    ["customers", "#c084fc"],
-    ["edge", "#ffb020"],
-    ["backups", "#3ddc97"],
-  ] as const;
-  const sized = sizes && {
-    groups: sizes.map((_, g) => ({
-      id: `g${g}`,
-      name: palette[g % 6]![0],
-      color: palette[g % 6]![1],
-      order: g,
-    })),
-    hosts: [
-      ...sizes.flatMap((n, g) =>
-        Array.from({ length: n }, (_, i) => {
-          const group = palette[g % 6]![0];
-          return host(
-            `h${g}-${i}`,
-            `${group.slice(0, 4)}-${i + 1}`,
-            group,
-            "deploy",
-            `10.0.${g}.${i + 10}`,
-            "ubuntu",
-          );
-        }),
-      ),
-      ...Array.from({ length: Number(params.get("ungrouped")) || 0 }, (_, i) =>
-        host(`u${i}`, `spare-${i + 1}`, "", "root", `10.9.0.${i + 10}`, "debian"),
-      ),
-    ],
-  };
   type Item = Record<string, unknown>;
   const upsert = (listKey: string, item: Item, idPrefix: string) => {
     const list = data[listKey] as Item[];
@@ -112,26 +71,22 @@ export default defineNuxtPlugin(() => {
     keys_scan: ["~/.ssh/id_ed25519", "~/.ssh/id_rsa"],
     hosts_list: firstRun
       ? []
-      : sized
-        ? sized.hosts
-        : [
-            host("h1", "api-prod-1", "production", "deploy", "10.0.4.12", "ubuntu", [
-              "nginx",
-              "node",
-            ]),
-            host("h2", "api-prod-2", "production", "deploy", "10.0.4.13", "ubuntu", ["nginx"]),
-            host("h3", "db-primary", "production", "postgres", "10.0.5.2", "debian", ["postgres"]),
-            host("h4", "nas.local", "homelab", "admin", "192.168.1.20"),
-            host("h5", "proxmox", "homelab", "root", "192.168.1.10", "debian"),
-          ],
+      : [
+          host("h1", "api-prod-1", "production", "deploy", "10.0.4.12", "ubuntu", [
+            "nginx",
+            "node",
+          ]),
+          host("h2", "api-prod-2", "production", "deploy", "10.0.4.13", "ubuntu", ["nginx"]),
+          host("h3", "db-primary", "production", "postgres", "10.0.5.2", "debian", ["postgres"]),
+          host("h4", "nas.local", "homelab", "admin", "192.168.1.20"),
+          host("h5", "proxmox", "homelab", "root", "192.168.1.10", "debian"),
+        ],
     groups_list: firstRun
       ? []
-      : sized
-        ? sized.groups
-        : [
-            { id: "g1", name: "production", color: "#ff8a8a" },
-            { id: "g2", name: "homelab", color: "#2dd4bf" },
-          ],
+      : [
+          { id: "g1", name: "production", color: "#ff8a8a" },
+          { id: "g2", name: "homelab", color: "#2dd4bf" },
+        ],
     snippets_list: [
       { id: "s1", name: "Tail app logs", command: "docker compose logs -f --tail 100" },
       { id: "s2", name: "Disk usage", command: "df -h" },
@@ -212,11 +167,8 @@ export default defineNuxtPlugin(() => {
       const prompt =
         "\x1b[30;44m \uf07c ~/app \x1b[34;43m\ue0b0\x1b[30m \ue725 main \x1b[0;33m\ue0b0" +
         "\x1b[0m  via \x1b[33m\ue718 v20.16.0\x1b[0m\r\n\x1b[32m\u276f\x1b[0m ";
-      const hooked = (end: string, header = true) =>
-        end +
-        osc("633;P;Branch=main") +
-        (header ? `${osc("633;H")}\r\n` : "") +
-        `${osc("133;A")}${prompt}${osc("133;B")}`;
+      const hooked = (end: string) =>
+        end + osc("633;P;Branch=main") + `${osc("133;A")}${prompt}${osc("133;B")}`;
       let setUp = false;
       let line = "";
       const id = shells.length + 1;
@@ -231,7 +183,7 @@ export default defineNuxtPlugin(() => {
         const cmd = line.trim();
         line = "";
         if (!setUp) return echo(`\r\n${prompt}`);
-        if (!cmd) return echo(`\r\n${hooked(osc("133;D"), false)}`);
+        if (!cmd) return echo(`\r\n${hooked(osc("133;D"))}`);
         const status = cmd === "false" ? 1 : 0;
         echo(`\r\n${osc("133;C")}${status ? "" : `${cmd}: done\r\n`}`);
         setTimeout(

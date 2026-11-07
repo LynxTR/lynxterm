@@ -6,7 +6,7 @@ defineEmits<{ close: [] }>();
 <template>
   <aside
     :aria-label="title"
-    class="flex w-[340px] shrink-0 flex-col border-l border-default bg-muted"
+    class="stagger flex w-[340px] shrink-0 flex-col border-l border-default bg-muted"
   >
     <div class="flex items-center gap-2 border-b border-default px-3.5 py-2.5">
       <span class="t-section">{{ title }}</span>

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Terminal, type IMarker } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
-import { useResizeObserver } from "@vueuse/core";
+import { useDebounceFn, useResizeObserver } from "@vueuse/core";
 import "@xterm/xterm/css/xterm.css";
 import { Channel, invoke } from "@tauri-apps/api/core";
 import hooks from "../../src-tauri/src/shell-integration.sh?raw";
@@ -27,12 +27,10 @@ const emit = defineEmits<{
   close: [];
 }>();
 const el = useTemplateRef("el");
+const scroller = useTemplateRef("scroller");
 const error = ref("");
 const unknownHost = ref(""); // fingerprint awaiting user approval
 const state = ref<SessionState>("connecting");
-const size = ref({ cols: 0, rows: 0 });
-const { keys } = useKeys();
-const keyName = computed(() => keys.value.find((k) => k.id === props.target.keyId)?.name);
 const toast = useToast();
 
 watch(state, (s) => emit("state", s), { immediate: true });
@@ -46,37 +44,30 @@ const term = new Terminal({
   fontFamily: '"JetBrains Mono", "Symbols Nerd Font Mono", monospace',
   fontSize: 13,
   lineHeight: 1.5,
-  cursorBlink: true,
-  allowProposedApi: true, // markers and decorations, for command blocks
-  // Base colors from app tokens (main.css): terminal and chrome share one palette. ANSI fixed.
+  // Own caret drawn; xterm's kept invisible for cell math.
+  cursorStyle: "bar",
+  cursorInactiveStyle: "none",
+  scrollback: 10_000, // current command only; rest are cards
+  allowProposedApi: true, // markers
+  // Base colors from app tokens; ANSI shared with cards (termHtml.ts).
   theme: {
     background: token("--ui-bg", "#0b0d10"),
-    foreground: "#c9d1d9",
-    cursor: token("--ui-primary", "#ffb020"),
-    cursorAccent: token("--ui-bg", "#0b0d10"),
+    foreground: FOREGROUND,
+    cursor: "#00000000",
     selectionBackground: `${token("--ui-primary", "#ffb020")}40`,
-    black: "#2e3440",
-    brightBlack: "#7c8594",
-    red: "#ff8a8a",
-    brightRed: "#ffa8a8",
-    green: "#3ddc97",
-    brightGreen: "#6ee7b7",
-    yellow: "#ffb020",
-    brightYellow: "#ffc95c",
-    blue: "#6cb6ff",
-    brightBlue: "#93c9ff",
-    magenta: "#c792ea",
-    brightMagenta: "#ddb6f2",
-    cyan: "#5eead4",
-    brightCyan: "#99f6e4",
-    white: "#c9d1d9",
-    brightWhite: "#f4f5f7",
+    ...ANSI,
+    scrollbarSliderBackground: "#ffffff14",
+    scrollbarSliderHoverBackground: "#ffffff26",
+    scrollbarSliderActiveBackground: "#ffffff33",
   },
 });
 const fit = new FitAddon();
 term.loadAddon(fit);
-// Fit only once open (onMounted waits for fonts first).
-useResizeObserver(el, () => term.element && fit.fit());
+// Fit once open and resize settled: each fit resizes server, shell redraws.
+useResizeObserver(
+  el,
+  useDebounceFn(() => term.element && fit.fit(), 120),
+);
 let id: number | undefined;
 
 // ── Suggestions ────────────────────────────────────────────────────────
@@ -96,10 +87,13 @@ const ghost = reactive({
   below: true, // menu under cursor, or above near bottom
   left: 0,
   top: 0,
-  width: 0, // of a cell
-  height: 0,
 });
-const rest = computed(() => ghost.list[ghost.pick]?.text.slice(ghost.line.length) ?? "");
+/** Suggestion left after typed and pending keys. */
+const rest = computed(() => {
+  const full = ghost.list[ghost.pick]?.text ?? "";
+  const typed = ghost.line + pending.text;
+  return full.startsWith(typed) ? full.slice(typed.length) : "";
+});
 const menu = computed(() => ghost.open && ghost.list.length > 1);
 // Word being completed: menu lines up under its first letter.
 const word = computed(() => ghost.line.slice(ghost.line.lastIndexOf(" ") + 1));
@@ -127,29 +121,33 @@ function readLine(start: { x: number; y: number }, toCursor = false) {
 }
 
 const settings = useSettings();
+const plain = settings.terminalStyle !== "blocks";
 term.parser.registerOscHandler(133, (data) => {
   // Markers before our own setup: hooks are in server's shell files.
   if (setup !== "done" && !settings.integratedHosts.includes(historyKey))
     settings.integratedHosts.push(historyKey);
   integrated.value = true;
   const b = term.buffer.active;
-  const block = blocks.at(-1);
-  if (data[0] === "B") promptStart = { x: b.cursorX, y: b.baseY + b.cursorY };
+  const l = live.value;
+  if (data[0] === "A") {
+    // Fresh prompt only: redraws (resize, Ctrl+L, Tab) get no D first.
+    if (!fresh) return true;
+    if (b.type === "normal" && !plain) freeze();
+    reveal();
+    live.value = { at: mark(), branch: gitBranch, cwd: cwd.value };
+    fresh = false;
+  } else if (data[0] === "B") promptStart = { x: b.cursorX, y: b.baseY + b.cursorY };
   else if (data[0] === "C") {
     const command = promptStart ? readLine(promptStart) : ""; // exactly as run, edits included
     if (command) record(historyKey, command);
     // cursor on first output line
-    if (block) Object.assign(block, { start: Date.now(), command, out: mark() });
+    Object.assign(l, { ran: true, command, start: Date.now(), out: mark() });
     promptStart = null;
   } else {
     // "D;1": command just ended, with exit status
-    if (data.startsWith("D;") && block?.start && block.status === undefined)
-      Object.assign(block, {
-        status: Number(data.slice(2)),
-        ms: Date.now() - block.start,
-        end: mark(),
-        endX: b.cursorX, // past 0: output's last line has no newline
-      });
+    if (data.startsWith("D;") && l.ran && l.status === undefined)
+      Object.assign(l, { status: Number(data.slice(2)), ms: Date.now() - l.start! });
+    fresh = true;
     promptStart = null;
   }
   return true;
@@ -164,116 +162,142 @@ term.parser.registerOscHandler(7, (data) => {
 });
 
 // ── Command blocks ─────────────────────────────────────────────────────
-// Warp-style, server untouched: once shell first goes quiet, hooks typed in as one line.
-// All hidden until they report back; then old prompt erased, shell draws hooked one. Above
-// each command hooks print empty line carrying divider and only what prompt doesn't show:
-// git branch, and once command ends, failure or slow run.
-interface Block {
+// Server untouched: hooks typed once at first prompt, hidden till they report. Each fresh
+// prompt freezes rows above into a card (termHtml.ts), clears terminal.
+interface Card {
   id: number;
-  marker: IMarker; // header row
-  el?: HTMLElement;
-  branch: string;
-  command?: string;
-  out?: IMarker; // first output line
-  end?: IMarker; // cursor when command ended
-  endX?: number;
-  start?: number;
-  ms?: number;
+  html: string[]; // wrapped rows rejoined: cards reflow
+  text: string[];
+  outAt: number;
+  command?: string; // undefined: login/server message, no header
   status?: number;
+  ms?: number;
+  start?: number;
+  branch: string;
+  cwd: string;
 }
+interface Live {
+  at?: IMarker; // prompt start
+  out?: IMarker; // first output line
+  ran?: boolean;
+  command?: string;
+  start?: number;
+  status?: number;
+  ms?: number;
+  cleared?: boolean; // `clear` ran: no card
+  branch: string;
+  cwd: string;
+}
+// ponytail: count cap; cap by total lines if huge outputs hog memory
+const MAX_CARDS = 300;
+const cards = shallowRef<Card[]>([]);
+const live = ref<Live>({ branch: "", cwd: "" });
+let fresh = true; // D seen since last A: shell drawing new prompt
+let nextCard = 0;
 const mark = () => markRaw(term.registerMarker(0));
-const blocks = reactive<Block[]>([]);
-const where = { branch: "" }; // latest OSC 633 properties
-const alternate = ref(false); // vim, htop…: blocks belong to normal screen
-term.buffer.onBufferChange((b) => (alternate.value = b.type === "alternate"));
+const scratch = term.buffer.normal.getNullCell();
+let gitBranch = ""; // latest OSC 633 P;Branch=
+const alternate = ref(false); // vim, htop…: full pane, cards hidden
+term.buffer.onBufferChange((b) => {
+  alternate.value = b.type === "alternate";
+  measure();
+});
 
 term.parser.registerOscHandler(633, (data) => {
-  const [kind, value = ""] = data.split(/;(.*)/s);
-  if (kind === "P") {
-    const [key, val = ""] = value.split(/=(.*)/s);
-    if (key === "Branch") where.branch = val;
-  } else if (kind === "H" && term.buffer.active.cursorX === 0) {
-    // hooks print "\n" next: this row stays empty
-    const marker = term.registerMarker(0);
-    const decoration = term.registerDecoration({ marker, width: term.cols, layer: "top" });
-    if (!decoration) return true;
-    const block = reactive<Block>({ id: marker.id, marker: markRaw(marker), ...where });
-    decoration.onRender((el) => {
-      if (block.el) return;
-      el.classList.add("lt-block");
-      block.el = el;
-    });
-    marker.onDispose(() => {
-      blocks.splice(blocks.indexOf(block), 1);
-      block.out?.dispose();
-      block.end?.dispose();
-    });
-    blocks.push(block);
-  }
+  if (data.startsWith("P;Branch=")) gitBranch = data.slice(9);
   return true;
 });
 
-// Block positions on screen. Sections drawn over terminal from outside, so they reach its padding.
-const view = reactive({ y: 0, rowHeight: 0 });
+// `clear`, Ctrl+L: cards go too.
+term.parser.registerCsiHandler({ final: "J" }, (params) => {
+  if ((params[0] === 2 || params[0] === 3) && term.buffer.active.type === "normal") {
+    cards.value = [];
+    if (live.value.ran) live.value.cleared = true;
+  }
+  return false; // terminal still clears
+});
+
+/** Rows prompt to cursor become card; terminal keeps cursor row. */
+function freeze() {
+  const b = term.buffer.normal;
+  const l = live.value;
+  const cursor = b.baseY + b.cursorY;
+  const outRow = l.out?.line ?? -1;
+  const inputRow = promptStart?.y ?? -1;
+  const { command, status, ms, start, branch } = l;
+  const card: Card = {
+    ...{ id: nextCard++, html: [], text: [], outAt: -1 },
+    ...{ command, status, ms, start, branch, cwd: l.cwd },
+  };
+  let extra = false; // text below prompt line
+  // Marker trimmed off scrollback: line -1, start at top.
+  for (let y = Math.max(l.at?.line ?? 0, 0); y < cursor; y++) {
+    const line = b.getLine(y)!;
+    const trim = !b.getLine(y + 1)?.isWrapped;
+    const [html, text] = [rowHtml(line, scratch, trim), line.translateToString(trim)];
+    if (line.isWrapped && card.html.length) {
+      card.html[card.html.length - 1] += html;
+      card.text[card.text.length - 1] += text;
+      continue;
+    }
+    if (y === outRow) card.outAt = card.html.length;
+    if (inputRow >= 0 && y > inputRow && text.trim()) extra = true;
+    card.html.push(html);
+    card.text.push(text);
+  }
+  while (card.text.length && !card.text.at(-1)!.trim()) (card.html.pop(), card.text.pop());
+  if (card.outAt < 0) card.outAt = card.text.length;
+  // Empty Enter, Ctrl+C: drop. Login (no prompt yet): keep.
+  const keep = l.ran ? !l.cleared : card.text.length && (!l.at || extra);
+  if (keep) cards.value = [...cards.value, card].slice(-MAX_CARDS);
+  term.clear();
+}
+
+const view = reactive({ y: 0, rowHeight: 0, cellWidth: 0, used: 0 });
+function usedRows() {
+  const b = term.buffer.active;
+  if (plain || b.type === "alternate" || b.baseY > 0) return term.rows;
+  for (let y = term.rows - 1; y > b.cursorY; y--)
+    if (b.getLine(y)?.translateToString(true)) return y + 1;
+  return b.cursorY + 1;
+}
 function measure() {
   const screen = el.value?.querySelector<HTMLElement>(".xterm-screen");
-  if (screen) view.rowHeight = screen.clientHeight / term.rows;
+  if (screen) {
+    view.rowHeight = screen.clientHeight / term.rows;
+    view.cellWidth = screen.clientWidth / term.cols;
+  }
   view.y = term.buffer.active.viewportY;
+  view.used = usedRows();
 }
 term.onScroll(measure);
-term.onWriteParsed(measure);
 term.onResize(measure);
+term.onWriteParsed(measure); // xterm stops painting while scrolled out of view
 
-/** Block's first and last buffer line: header down to next one, minus empty row hooks print
- *  between blocks (hooks installed before it have none). */
-function lines(block: Block) {
-  const next = blocks[blocks.indexOf(block) + 1];
-  const b = term.buffer.active;
-  if (!next) return [block.marker.line, b.baseY + b.cursorY] as const;
-  let last = next.marker.line - 1;
-  if (last > block.marker.line && !b.getLine(last)?.translateToString(true)) last--;
-  return [block.marker.line, last] as const;
-}
-/** px under section's last line, taken from empty row below it. */
-const PAD = 6;
-/** Top and height in px within padded area, clipped to screen; undefined when off it. */
-function box([first, last]: readonly [number, number]) {
-  const top = Math.max(first - view.y, 0);
-  const bottom = Math.min(last - view.y + 1, term.rows);
-  if (bottom <= top) return;
-  const pad = last - view.y + 1 < term.rows ? PAD : 0;
-  return {
-    top: `${16 + top * view.rowHeight}px`,
-    height: `${(bottom - top) * view.rowHeight + pad}px`,
-  };
-}
+// Stick to bottom unless user scrolled up. Scroll anchoring off: it moved scroll as cards
+// settled, read as user scroll.
+let stick = true;
+const onScroll = () => {
+  const s = scroller.value!;
+  stick = s.scrollHeight - s.scrollTop - s.clientHeight < 8;
+};
+const follow = () =>
+  stick &&
+  nextTick(() => scroller.value && (scroller.value.scrollTop = scroller.value.scrollHeight));
 
-const hovered = ref<Block>();
-function hover(e: MouseEvent) {
-  const screen = el.value?.querySelector(".xterm-screen");
-  if (!screen || alternate.value) return (hovered.value = undefined);
-  measure();
-  const row = Math.floor((e.clientY - screen.getBoundingClientRect().top) / view.rowHeight);
-  hovered.value = blocks.findLast((b) => b.marker.line <= view.y + row);
-}
-/** Blocks whose command ran; each gets a section behind it. */
-const sections = computed(() => blocks.filter((b) => b.command));
+// Growth at bottom (cards, lazy card height, rows) keeps prompt in view.
+const content = useTemplateRef("content");
+useResizeObserver(content, follow);
+/** Rows fill scroller minus padding (blocks: header, border). */
+const paneHeight = ref(0);
+const fitPane = () =>
+  scroller.value && (paneHeight.value = scroller.value.clientHeight - (plain ? 24 : 62));
+useResizeObserver(scroller, fitPane);
+// Card click without selection: back to typing.
+const refocus = () => getSelection()?.toString() || term.focus();
+
 const clock = (ms: number) =>
   new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-
-/** Output as plain text, wrapped lines rejoined. */
-function output(block: Block) {
-  if (!block.out || !block.end) return "";
-  const b = term.buffer.active;
-  const last = block.end.line - (block.endX ? 0 : 1);
-  let text = "";
-  for (let y = block.out.line; y <= last; y++) {
-    const line = b.getLine(y);
-    if (!line) break;
-    text += (y > block.out.line && !line.isWrapped ? "\n" : "") + line.translateToString(true);
-  }
-  return text.replace(/\n+$/, "");
-}
 const copy = (text: string, what: string) =>
   copyText(text, `Copied the ${what}`).then(() => term.focus());
 
@@ -291,19 +315,35 @@ const SETUP = (() => {
   // Only bash and zsh run it; other shells fail the test.
   return ` [ -n "$BASH_VERSION$ZSH_VERSION" ] && eval "$(printf %s '${btoa(script)}' | base64 -d)"\r`;
 })();
-let setup: "wait" | "hidden" | "done" = settings.blocks ? "wait" : "done";
+let setup: "wait" | "hidden" | "done" = settings.terminalStyle !== "raw" ? "wait" : "done";
 let timer: ReturnType<typeof setTimeout> | undefined;
 let held = ""; // output while hidden
 let typedAhead = ""; // keys pressed while hidden
 const decoder = new TextDecoder();
+/** Setup unsure prompt is up: user decides. */
+const offer = ref(false);
+
+function cursorKind() {
+  const b = term.buffer.active;
+  return lineKind(b.getLine(b.baseY + b.cursorY)?.translateToString(false, 0, b.cursorX) ?? "");
+}
 
 function startSetup() {
   if (setup !== "wait" || state.value === "closed") return;
   // Prompt leaves cursor after it; at column 0 login still printing.
   if (id === undefined || term.buffer.active.cursorX === 0)
     return void (timer = setTimeout(startSetup, 400));
+  const kind = cursorKind();
+  // Login asks (Hetzner password change): show now. Setup retries on more output.
+  if (kind === "asking") return reveal();
+  if (kind === "unsure") return void ((setup = "done"), (offer.value = true), reveal());
+  typeSetup();
+}
+
+function typeSetup(prefix = "") {
+  offer.value = false;
   setup = "hidden";
-  invoke("ssh_write", { id, data: SETUP });
+  invoke("ssh_write", { id, data: prefix + SETUP });
   timer = setTimeout(() => finishSetup(held), 3000); // not bash or zsh: show all
 }
 
@@ -315,13 +355,30 @@ function finishSetup(rest: string, promptLines?: number) {
   const erase =
     promptLines === undefined ? "" : `${promptLines ? `\x1b[${promptLines}A` : ""}\r\x1b[J`;
   term.write(erase + rest);
+  if (promptLines === undefined) reveal(); // not bash or zsh: no prompt marker coming
   if (typedAhead) send(typedAhead);
   typedAhead = "";
 }
 
+// Host card stays up during login output (else rows grow, then jump into card): until first
+// prompt, login question, or 4s.
+const ready = ref(false);
+let readyTimer: ReturnType<typeof setTimeout> | undefined;
+function reveal() {
+  clearTimeout(readyTimer);
+  ready.value = true;
+}
+const revealIn = (ms: number) => {
+  if (ready.value) return;
+  clearTimeout(readyTimer);
+  readyTimer = setTimeout(reveal, ms);
+};
+
 function receive(bytes: Uint8Array) {
   if (setup !== "hidden") {
     term.write(bytes);
+    // No setup (raw, user typed): show once output quiet.
+    if (setup === "done") revealIn(400);
     // Wait for shell to go quiet: that is when it shows first prompt.
     if (setup === "wait") {
       clearTimeout(timer);
@@ -330,8 +387,8 @@ function receive(bytes: Uint8Array) {
     return;
   }
   held += decoder.decode(bytes, { stream: true });
-  const ready = /\x1b\]633;Ready;(\d+)\x07/.exec(held);
-  if (ready) finishSetup(held.slice(ready.index + ready[0].length), Number(ready[1]));
+  const done = /\x1b\]633;Ready;(\d+)\x07/.exec(held);
+  if (done) finishSetup(held.slice(done.index + done[0].length), Number(done[1]));
 }
 
 /** `text` echoed on cursor line? Password prompts don't echo, so never saved. */
@@ -370,7 +427,8 @@ function currentLine(): string | null {
   if (!integrated.value) return stale ? null : typed;
   if (!promptStart) return null;
   const upToCursor = readLine(promptStart, true);
-  return upToCursor === readLine(promptStart) ? upToCursor : null; // only with cursor at end
+  // cursor at end only; trailing spaces count as end
+  return upToCursor.trimEnd() === readLine(promptStart) ? upToCursor : null;
 }
 
 function updateGhost() {
@@ -385,18 +443,14 @@ function updateGhost() {
   const screen = el.value?.querySelector<HTMLElement>(".xterm-screen");
   if (!ghost.list.length || !screen) return;
   const b = term.buffer.active;
-  ghost.height = screen.clientHeight / term.rows;
-  ghost.width = screen.clientWidth / term.cols;
-  ghost.left = b.cursorX * ghost.width;
-  ghost.top = b.cursorY * ghost.height;
-  ghost.below = b.cursorY < term.rows / 2;
+  ghost.left = b.cursorX * view.cellWidth;
+  ghost.top = b.cursorY * view.rowHeight;
+  const box = scroller.value?.getBoundingClientRect();
+  ghost.below = !box || screen.getBoundingClientRect().top + ghost.top - box.top < box.height / 2;
 }
-term.onWriteParsed(updateGhost);
-term.onCursorMove(updateGhost);
-term.onScroll(updateGhost);
 
 function accept(i = ghost.pick) {
-  const text = ghost.list[i]?.text.slice(ghost.line.length);
+  const text = ghost.list[i]?.text.slice(ghost.line.length + pending.text.length);
   if (!text || id === undefined) return;
   ghost.list = [];
   if (!integrated.value) typed += text;
@@ -404,16 +458,66 @@ function accept(i = ghost.pick) {
   term.focus();
 }
 
+// Editor-style selection on typed line (lineSelect.ts). Shell never sees these keys; any
+// other key drops selection.
+let anchor: number | null = null;
+let head = 0;
+const SELECT_KEYS = ["ArrowLeft", "ArrowRight", "Home", "End"];
+function selectByKey(e: KeyboardEvent) {
+  const b = term.buffer.active;
+  const cursor = { x: b.cursorX, y: b.baseY + b.cursorY };
+  // Hooks: prompt only (running program may want keys). None: cursor row.
+  const start = promptStart ?? (integrated.value ? null : { x: 0, y: cursor.y });
+  if (!start || b.type === "alternate") return false;
+  const text = readLine(start);
+  if (anchor === null || !term.hasSelection()) {
+    const at = (cursor.y - start.y) * term.cols + cursor.x - start.x;
+    anchor = head = Math.min(Math.max(at, 0), text.length);
+  }
+  head = moveHead(text, head, e.key, e.ctrlKey);
+  const from = start.x + Math.min(anchor, head);
+  const length = Math.abs(head - anchor);
+  if (length) term.select(from % term.cols, start.y + Math.floor(from / term.cols), length);
+  else term.clearSelection();
+  return true;
+}
+
 // Fish-style: Right arrow at line end accepts suggestion. Tab and Enter stay the shell's.
 term.attachCustomKeyEventHandler((e) => {
-  // User typing: setup now would land mid-line. Not in onData: xterm also answers server's
-  // terminal queries through it.
-  if (e.type === "keydown" && setup === "wait") {
+  const normal = term.buffer.active.type === "normal";
+  // Paste via webview paste event (xterm takes it). Ctrl+V stays vim's in full-screen apps.
+  const paste = e.ctrlKey && !e.altKey && !e.metaKey && e.code === "KeyV" && (e.shiftKey || normal);
+  if (e.type !== "keydown") return !paste;
+  // Typing: setup now lands mid-line. Login answers fine. Not onData: xterm answers server
+  // queries through it.
+  if (setup === "wait" && cursorKind() !== "asking") {
     setup = "done";
     clearTimeout(timer);
+    reveal();
   }
-  const plain = !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey;
-  if (e.type !== "keydown" || !plain || !rest.value) return true;
+  // Ctrl+Shift+C copies; Ctrl+C too with selection (Windows Terminal).
+  if (e.ctrlKey && e.code === "KeyC" && (e.shiftKey || term.hasSelection())) {
+    const text = term.getSelection() || getSelection()?.toString();
+    if (text) copyText(text, "Copied");
+    term.clearSelection();
+    return false;
+  }
+  if (e.shiftKey && !e.altKey && !e.metaKey && SELECT_KEYS.includes(e.key)) {
+    if (selectByKey(e)) {
+      e.preventDefault();
+      return false;
+    }
+  } else if (!["Shift", "Control"].includes(e.key)) anchor = null;
+  // Text-field shortcuts as shell keys (shellKeys.ts).
+  const shell = normal ? shellKey(e) : undefined;
+  if (shell) {
+    e.preventDefault();
+    term.input(shell);
+    return false;
+  }
+  if (paste) return false;
+  const bare = !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey;
+  if (!bare || !rest.value) return true;
   const n = ghost.list.length;
   if (e.key === "ArrowRight") accept();
   else if (menu.value && e.key === "ArrowDown") ghost.pick = (ghost.pick + 1) % n;
@@ -423,34 +527,13 @@ term.attachCustomKeyEventHandler((e) => {
   return false;
 });
 
-const installing = ref(false);
-const installIntegration = () =>
-  withBusy(installing, async () => {
-    await invoke("shell_integration_install", { id });
-    logActivity(props.target, {
-      kind: "integration",
-      title: "Installed shell integration",
-      detail: "~/.bashrc, ~/.zshrc",
-    });
-    toast.add({
-      title: "Shell integration installed",
-      description: "It takes effect in new sessions, or reload the shell here.",
-      icon: "i-ph-sparkle-duotone",
-      actions: [
-        {
-          label: "Reload shell",
-          // Leading space: never saved to history.
-          onClick: () => invoke("ssh_write", { id, data: ' exec "$SHELL"\r' }),
-        },
-      ],
-    });
-  });
-
 const onData = new Channel<ArrayBuffer>();
 onData.onmessage = (buf) => {
   if (buf.byteLength) return receive(new Uint8Array(buf));
   // Empty frame: session ended.
   if (setup === "hidden") finishSetup(held);
+  reveal();
+  offer.value = false;
   term.write("\r\n\x1b[90m[session closed]\x1b[0m\r\n");
   state.value = "closed";
 };
@@ -458,15 +541,87 @@ function send(data: string) {
   track(data);
   invoke("ssh_write", { id, data });
 }
+
+// Slow link: typed text grey till echoed (localEcho.ts).
+const pending = reactive(echoState());
+const echo = localEcho(
+  {
+    get cols() {
+      return term.cols;
+    },
+    cursor: () => {
+      const b = term.buffer.active;
+      return { x: b.cursorX, y: b.baseY + b.cursorY };
+    },
+    cell: (x, y) => term.buffer.active.getLine(y)?.getCell(x)?.getChars() ?? "",
+    restBlank: () => {
+      const b = term.buffer.active;
+      return !b.getLine(b.baseY + b.cursorY)?.translateToString(true, b.cursorX);
+    },
+    unsafe: () => !settings.localEcho || alternate.value || cursorKind() === "asking",
+  },
+  pending,
+);
+const echoing = computed(echo.visible);
+
+// ── Caret ──────────────────────────────────────────────────────────────
+// Glides, blinks when idle, sits after grey echo: one cursor, never two.
+const caret = reactive({ x: 0, y: 0, glide: false, idle: false, hidden: false, focused: false });
+let idleTimer: ReturnType<typeof setTimeout> | undefined;
+function placeCaret() {
+  const b = term.buffer.active;
+  // Hidden echo (password, fast link): no move.
+  const [x, y] = echoing.value
+    ? [pending.x + pending.text.length, pending.y]
+    : [b.cursorX, b.baseY + b.cursorY];
+  if (x === caret.x && y === caret.y) return;
+  Object.assign(caret, { glide: y === caret.y, x, y, idle: false });
+  clearTimeout(idleTimer);
+  idleTimer = setTimeout(() => (caret.idle = true), 600);
+}
+// DECTCEM hide (htop); xterm handles it too.
+const dectcem = (hidden: boolean) => (params: (number | number[])[]) => {
+  if (params.includes(25)) caret.hidden = hidden;
+  return false;
+};
+term.parser.registerCsiHandler({ prefix: "?", final: "h" }, dectcem(false));
+term.parser.registerCsiHandler({ prefix: "?", final: "l" }, dectcem(true));
+
+// Overlays move after xterm paints: else text and cursor disagree a frame (jitter typing fast).
+term.onRender(() => {
+  echo.settle();
+  placeCaret();
+  updateGhost();
+  measure();
+  follow();
+});
+
 term.onData((data) => {
   if (id === undefined) return;
   if (setup === "hidden") return void (typedAhead += data);
+  echo.key(data);
+  placeCaret();
+  stick = true;
   send(data);
 });
 term.onResize(({ cols, rows }) => {
-  size.value = { cols, rows };
   if (id !== undefined) invoke("ssh_resize", { id, cols, rows });
 });
+
+// Password asked here; saving needs saved host.
+const { hosts, refresh: refreshHosts } = useHosts();
+const saved = computed(() => hosts.value.find((h) => hostKey(h) === historyKey));
+const password = ref(props.target.password);
+const remember = ref(true);
+const askPassword = ref(false);
+
+/** Connect card until first login. */
+const opened = ref(false);
+const gate = computed(
+  () => !opened.value && (askPassword.value || !!unknownHost.value || !!error.value),
+);
+/** Card stays through shell start (`ready`). */
+const cover = computed(() => gate.value || !ready.value);
 
 async function open(trust?: string) {
   error.value = unknownHost.value = "";
@@ -474,12 +629,23 @@ async function open(trust?: string) {
   try {
     id = await invoke<number>("ssh_open", {
       ...props.target,
+      password: password.value,
       trust,
       cols: term.cols,
       rows: term.rows,
       onData,
     });
+    if (password.value && remember.value && saved.value) {
+      const { host, port, user } = props.target;
+      invoke("host_password_save", { host, port, user, password: password.value })
+        .then(refreshHosts)
+        .catch((e) => toast.add({ title: "Couldn't save the password", description: String(e) }));
+    }
+    password.value = "";
+    askPassword.value = false;
+    opened.value = true;
     state.value = "open";
+    revealIn(4000);
     emit("session", id);
     invoke<string[]>("ssh_commands", { id })
       .then((list) => (commands.value = list))
@@ -488,9 +654,23 @@ async function open(trust?: string) {
   } catch (e) {
     const msg = String(e);
     if (msg.startsWith("unknown-host:")) unknownHost.value = msg.slice("unknown-host:".length);
-    else error.value = msg;
+    else if (msg === "Authentication failed" && !props.target.keyId) {
+      // Saved one stale after password change on server.
+      error.value = password.value ? "Wrong password" : "The saved password didn't work";
+      password.value = "";
+      askPassword.value = true;
+    } else error.value = msg;
     state.value = "closed";
   }
+}
+
+function connect() {
+  if (
+    asksPassword({ ...props.target, savedPassword: saved.value?.savedPassword }) &&
+    !password.value
+  )
+    return void ((askPassword.value = true), (state.value = "closed"));
+  open();
 }
 
 onMounted(async () => {
@@ -499,184 +679,290 @@ onMounted(async () => {
     document.fonts.load('13px "JetBrains Mono"'),
     document.fonts.load('13px "Symbols Nerd Font Mono"', "\ue0b0"),
   ]);
+  fitPane();
+  await nextTick();
   term.open(el.value!);
-  term.textarea?.addEventListener("focus", () => emit("focus"));
+  term.textarea?.addEventListener("focus", () => ((caret.focused = true), emit("focus")));
+  term.textarea?.addEventListener("blur", () => (caret.focused = false));
+  term.element?.addEventListener("mousedown", () => (anchor = null)); // mouse selects anew
   fit.fit();
-  size.value = { cols: term.cols, rows: term.rows };
-  open();
+  measure();
+  connect();
 });
 
 onBeforeUnmount(() => {
   clearTimeout(timer);
+  clearTimeout(readyTimer);
   if (id !== undefined) invoke("ssh_close", { id });
   term.dispose();
 });
 </script>
 
 <template>
-  <div class="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-    <div v-if="error || unknownHost" class="flex flex-col gap-3 px-5 pt-4">
+  <div class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+    <!-- Card till shell ready; terminal laid out invisible underneath, keeps its size -->
+    <Transition leave-active-class="transition-opacity duration-150" leave-to-class="opacity-0">
+      <div v-if="cover" class="absolute inset-0 z-20 grid animate-enter place-items-center p-6">
+        <div class="flex w-full max-w-sm flex-col gap-4 card p-5">
+          <div class="flex min-w-0 items-center gap-3">
+            <HostLogo :os="saved?.os" />
+            <div class="min-w-0">
+              <div class="truncate font-medium">{{ hostName(target) }}</div>
+              <div class="truncate font-mono text-xs text-muted">{{ hostLabel(target) }}</div>
+            </div>
+          </div>
+          <UAlert
+            v-if="error"
+            color="error"
+            variant="subtle"
+            icon="i-ph-warning-circle-duotone"
+            :title="error"
+          />
+          <template v-if="unknownHost">
+            <p class="text-sm text-muted">
+              First connection to this host. Trust it only if this key fingerprint matches the
+              server's.
+            </p>
+            <code class="rounded-md bg-elevated px-2.5 py-2 font-mono text-xs break-all">
+              {{ unknownHost }}
+            </code>
+            <UButton
+              label="Trust and connect"
+              icon="i-ph-shield-check-duotone"
+              class="self-end"
+              :loading="state === 'connecting'"
+              @click="open(unknownHost)"
+            />
+          </template>
+          <form v-else-if="askPassword" class="flex flex-col gap-3" @submit.prevent="open()">
+            <UInput
+              v-model="password"
+              type="password"
+              required
+              autofocus
+              placeholder="Password"
+              aria-label="SSH password"
+              class="w-full"
+            />
+            <div class="flex items-center gap-3">
+              <UCheckbox
+                v-if="saved"
+                v-model="remember"
+                label="Save password"
+                description="Encrypted in your vault, synced like keys."
+              />
+              <UButton
+                type="submit"
+                label="Connect"
+                icon="i-ph-terminal-duotone"
+                class="ml-auto"
+                :loading="state === 'connecting'"
+              />
+            </div>
+          </form>
+          <UButton
+            v-else-if="error"
+            label="Try again"
+            icon="i-ph-arrow-clockwise"
+            class="self-end"
+            :loading="state === 'connecting'"
+            @click="connect()"
+          />
+          <div v-else class="hint">
+            <UIcon name="i-ph-circle-notch" class="size-4 animate-spin text-primary" />
+            {{ state === "connecting" ? "Connecting…" : "Starting shell…" }}
+          </div>
+        </div>
+      </div>
+    </Transition>
+    <div v-if="offer && state === 'open' && !alternate" class="animate-enter px-4 pt-3">
       <UAlert
-        v-if="error"
-        color="error"
+        color="neutral"
         variant="subtle"
-        icon="i-ph-warning-circle-duotone"
-        :title="error"
-      />
-      <UAlert
-        v-if="unknownHost"
-        color="warning"
-        variant="subtle"
-        icon="i-ph-shield-warning-duotone"
-        title="First connection to this host"
-        :description="`Its key fingerprint is ${unknownHost}. Trust it only if it matches the server's.`"
-        :actions="[{ label: 'Trust and connect', onClick: () => open(unknownHost) }]"
+        icon="i-ph-rows-duotone"
+        title="Turn on command blocks here?"
+        description="Lynxterm couldn't spot a shell prompt, so it didn't type its setup line. Turn on only if a shell is waiting for a command."
+        :actions="[
+          { label: 'Turn on', onClick: () => typeSetup('\x15') },
+          { label: 'Not now', color: 'neutral', variant: 'ghost', onClick: () => (offer = false) },
+        ]"
       />
     </div>
-    <!-- padding on wrapper: FitAddon measures element it is given -->
-    <div class="relative min-h-0 flex-1 px-5 py-4">
-      <template v-if="!alternate">
-        <div
-          v-for="block in sections"
-          :key="block.id"
-          class="pointer-events-none absolute inset-x-2 z-10 rounded-md border border-white/[0.06] bg-white/[0.02]"
-          :class="hovered === block && 'bg-white/[0.04]'"
-          :style="box(lines(block))"
-        />
-      </template>
-      <div
-        class="relative h-full overflow-hidden"
-        @mousemove="hover"
-        @mouseleave="hovered = undefined"
-      >
-        <div ref="el" class="h-full" />
-        <!-- each block's header, inside empty row xterm keeps for it -->
-        <template v-for="block in blocks" :key="block.id">
-          <Teleport v-if="block.el && !alternate" :to="block.el">
-            <div class="flex h-full items-center gap-3 px-2.5 font-sans text-[11px] text-dimmed">
-              <template v-if="block.command">
-                <span v-if="block.status === undefined">running</span>
-                <span v-else :class="block.status && 'text-error'">exit {{ block.status }}</span>
-                <span v-if="(block.ms ?? 0) >= 1000">{{ took(block.ms!) }}</span>
-                <span v-if="block.start">{{ clock(block.start) }}</span>
-              </template>
-              <span v-if="block.branch" class="flex min-w-0 items-center gap-1">
-                <UIcon name="i-ph-git-branch-duotone" class="size-3.5 shrink-0" />
-                <span class="truncate">{{ block.branch }}</span>
+    <!-- --row: cards match terminal row height -->
+    <div
+      ref="scroller"
+      class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3 [overflow-anchor:none]"
+      :class="cover ? 'invisible' : 'animate-fade'"
+      :style="{ '--row': `${view.rowHeight || 24}px` }"
+      @scroll="onScroll"
+      @mouseup="refocus"
+    >
+      <div ref="content" class="flex shrink-0 flex-col gap-2">
+        <template v-if="!alternate">
+          <section
+            v-for="c in cards"
+            :key="c.id"
+            class="group shrink-0 card [contain-intrinsic-size:auto_96px] [content-visibility:auto]"
+            :class="c.status && 'border-error/40'"
+          >
+            <header v-if="c.command !== undefined" class="card-head">
+              <span v-if="c.status !== undefined" :class="c.status ? 'text-error' : 'text-success'">
+                exit {{ c.status }}
               </span>
-              <!-- mousedown.stop: no text selection in terminal -->
-              <span v-if="hovered === block && block.command" class="ml-auto flex gap-3">
-                <button
-                  class="hover:text-default"
-                  @mousedown.prevent.stop
-                  @click="copy(block.command, 'command')"
-                >
+              <span v-if="(c.ms ?? 0) >= 1000">{{ took(c.ms!) }}</span>
+              <span v-if="c.start">{{ clock(c.start) }}</span>
+              <span v-if="c.cwd" class="truncate">{{ c.cwd }}</span>
+              <span v-if="c.branch" class="flex min-w-0 items-center gap-1">
+                <UIcon name="i-ph-git-branch-duotone" class="size-3.5 shrink-0" />
+                <span class="truncate">{{ c.branch }}</span>
+              </span>
+              <span class="ml-auto hidden gap-3 group-hover:flex">
+                <button class="hover:text-default" @click="copy(c.command, 'command')">
                   copy command
                 </button>
                 <button
-                  v-if="output(block)"
+                  v-if="c.outAt < c.text.length"
                   class="hover:text-default"
-                  @mousedown.prevent.stop
-                  @click="copy(output(block), 'output')"
+                  @click="copy(c.text.slice(c.outAt).join('\n'), 'output')"
                 >
                   copy output
                 </button>
               </span>
-            </div>
-          </Teleport>
+            </header>
+            <!-- safe: rowHtml escapes text, styles its own -->
+            <div
+              class="lt-out px-3 pb-2"
+              :class="c.command === undefined && 'pt-2'"
+              v-html="c.html.join('\n')"
+            />
+          </section>
         </template>
-        <span
-          v-if="rest"
-          aria-hidden="true"
-          class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-dimmed"
-          :style="{
-            left: `${ghost.left}px`,
-            top: `${ghost.top}px`,
-            height: `${ghost.height}px`,
-            lineHeight: `${ghost.height}px`,
-          }"
-          >{{ rest }}</span
-        >
-        <!-- mousedown.prevent keeps focus in terminal -->
-        <ul
-          v-if="menu"
-          role="listbox"
-          aria-label="Suggestions"
-          class="absolute z-10 w-max max-w-md overflow-hidden rounded-md border border-default bg-elevated py-1 font-mono text-xs shadow-lg"
-          :style="{
-            left: `max(0px, min(${ghost.left - word.length * ghost.width}px, 100% - 28rem))`,
-            ...(ghost.below
-              ? { top: `${ghost.top + ghost.height + 2}px` }
-              : { bottom: `calc(100% - ${ghost.top - 2}px)` }),
-          }"
-        >
-          <li
-            v-for="(item, i) in ghost.list"
-            :key="item.text"
-            role="option"
-            :aria-selected="i === ghost.pick"
-            class="flex cursor-pointer gap-4 px-2.5 py-1"
-            :class="i === ghost.pick ? 'bg-accented text-default' : 'text-muted'"
-            @mousedown.prevent="accept(i)"
-            @mousemove="ghost.pick = i"
-          >
-            <span class="min-w-0 flex-auto truncate">
-              <span class="text-primary">{{ word }}</span
-              >{{ item.text.slice(ghost.line.length) }}
+
+        <section class="relative shrink-0" :class="!plain && 'card'">
+          <UButton
+            v-if="plain && closable"
+            icon="i-ph-x"
+            size="xs"
+            color="neutral"
+            variant="ghost"
+            aria-label="Close this pane"
+            class="absolute top-0 right-0 z-30"
+            @click="emit('close')"
+          />
+          <header v-if="!plain" class="card-head">
+            <span v-if="state === 'connecting'" class="text-primary">connecting…</span>
+            <span v-else-if="state === 'closed'">disconnected</span>
+            <span v-else-if="live.ran && live.status === undefined" class="text-primary">
+              running
             </span>
-            <span v-if="item.hint" class="max-w-60 truncate text-dimmed">{{ item.hint }}</span>
-          </li>
-          <li
-            aria-hidden="true"
-            class="border-t border-default px-2.5 pt-1 text-[11px] text-dimmed"
-          >
-            <span class="flex items-center gap-1.5">
-              <UKbd value="arrowup" /><UKbd value="arrowdown" /> pick
-              <UKbd value="arrowright" class="ms-1.5" /> accept
-              <UKbd value="escape" class="ms-1.5" /> close
+            <span class="truncate">{{ cwd || hostLabel(target) }}</span>
+            <span v-if="live.branch" class="flex min-w-0 items-center gap-1">
+              <UIcon name="i-ph-git-branch-duotone" class="size-3.5 shrink-0" />
+              <span class="truncate">{{ live.branch }}</span>
             </span>
-          </li>
-        </ul>
+            <UButton
+              v-if="closable"
+              icon="i-ph-x"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              aria-label="Close this pane"
+              class="-my-1 ml-auto"
+              @click="emit('close')"
+            />
+          </header>
+          <!-- full pane rows (FitAddon measures el), shown only as far as used -->
+          <div
+            class="relative"
+            :class="!plain && 'mx-3 mb-2'"
+            :style="{ height: `${view.used * view.rowHeight}px` }"
+          >
+            <div class="absolute inset-x-0 top-0 h-full overflow-hidden">
+              <div ref="el" :style="{ height: `${paneHeight}px` }" />
+            </div>
+            <!-- pending echo, then suggestion -->
+            <span
+              v-if="echoing"
+              aria-hidden="true"
+              class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-muted"
+              :style="{
+                left: `${pending.x * view.cellWidth}px`,
+                top: `${(pending.y - view.y) * view.rowHeight}px`,
+                lineHeight: `${view.rowHeight}px`,
+              }"
+              >{{ pending.text }}</span
+            >
+            <span
+              v-if="rest && (echoing || !pending.text)"
+              aria-hidden="true"
+              class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-dimmed"
+              :style="{
+                left: `${caret.x * view.cellWidth}px`,
+                top: `${(caret.y - view.y) * view.rowHeight}px`,
+                lineHeight: `${view.rowHeight}px`,
+              }"
+              >{{ rest }}</span
+            >
+            <!-- whole pixels via transform: fractional `left` leaves stray pixel in WebKitGTK -->
+            <span
+              v-if="
+                state === 'open' &&
+                !caret.hidden &&
+                caret.y >= view.y &&
+                caret.y < view.y + term.rows
+              "
+              aria-hidden="true"
+              class="pointer-events-none absolute top-0 left-0 w-0.5 bg-primary will-change-transform"
+              :class="[caret.idle && caret.focused && 'lt-blink', !caret.focused && 'opacity-40']"
+              :style="{
+                transform: `translate(${Math.round(caret.x * view.cellWidth)}px, ${Math.round((caret.y - view.y + 0.15) * view.rowHeight)}px)`,
+                height: `${Math.round(view.rowHeight * 0.7)}px`,
+                transition: caret.glide ? 'transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+              }"
+            />
+            <!-- mousedown.prevent keeps focus in terminal -->
+            <ul
+              v-if="menu"
+              role="listbox"
+              aria-label="Suggestions"
+              class="absolute z-10 w-max max-w-md overflow-hidden rounded-md border border-default bg-elevated py-1 font-mono text-xs shadow-lg"
+              :style="{
+                left: `max(0px, min(${ghost.left - word.length * view.cellWidth}px, 100% - 28rem))`,
+                ...(ghost.below
+                  ? { top: `${ghost.top + view.rowHeight + 2}px` }
+                  : { bottom: `calc(100% - ${ghost.top - 2}px)` }),
+              }"
+            >
+              <li
+                v-for="(item, i) in ghost.list"
+                :key="item.text"
+                role="option"
+                :aria-selected="i === ghost.pick"
+                class="flex cursor-pointer gap-4 px-2.5 py-1"
+                :class="i === ghost.pick ? 'bg-accented text-default' : 'text-muted'"
+                @mousedown.prevent="accept(i)"
+                @mousemove="ghost.pick = i"
+              >
+                <span class="min-w-0 flex-auto truncate">
+                  <span class="text-primary">{{ word }}</span
+                  >{{ item.text.slice(ghost.line.length) }}
+                </span>
+                <span v-if="item.hint" class="max-w-60 truncate text-dimmed">{{ item.hint }}</span>
+              </li>
+              <li
+                aria-hidden="true"
+                class="border-t border-default px-2.5 pt-1 text-[11px] text-dimmed"
+              >
+                <span class="flex items-center gap-1.5">
+                  <UKbd value="arrowup" /><UKbd value="arrowdown" /> pick
+                  <UKbd value="arrowright" class="ms-1.5" /> accept
+                  <UKbd value="escape" class="ms-1.5" /> close
+                </span>
+              </li>
+            </ul>
+          </div>
+        </section>
       </div>
     </div>
-    <footer
-      class="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-default bg-sunken px-4 py-2 font-mono text-xs text-muted"
-    >
-      <span v-if="state === 'open'" class="flex items-center gap-1.5 text-success">
-        <UIcon name="i-ph-shield-check-duotone" class="size-4" />
-        host key verified
-      </span>
-      <span v-else-if="state === 'connecting'" class="text-primary">connecting…</span>
-      <span v-else class="text-dimmed">disconnected</span>
-      <span>{{ target.user }}@{{ maskHost(target.host) }}:{{ target.port }}</span>
-      <span>{{ keyName ? `key: ${keyName}` : "password" }}</span>
-      <span v-if="integrated" class="flex min-w-0 items-center gap-1.5" title="Shell integration">
-        <UIcon name="i-ph-sparkle-duotone" class="size-4 shrink-0 text-primary" />
-        <span class="truncate">{{ cwd || "shell integration" }}</span>
-      </span>
-      <UButton
-        v-else-if="state === 'open'"
-        icon="i-ph-sparkle-duotone"
-        label="Enable shell integration"
-        size="xs"
-        color="neutral"
-        variant="ghost"
-        class="-my-1"
-        :loading="installing"
-        @click="installIntegration"
-      />
-      <span class="ml-auto">{{ size.cols }}×{{ size.rows }}</span>
-      <span>UTF-8</span>
-      <UButton
-        v-if="closable"
-        icon="i-ph-x"
-        size="xs"
-        color="neutral"
-        variant="ghost"
-        aria-label="Close this pane"
-        class="-my-1"
-        @click="emit('close')"
-      />
-    </footer>
   </div>
 </template>

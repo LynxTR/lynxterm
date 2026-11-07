@@ -9,9 +9,24 @@
   unicode-range: U+23FB-23FE, U+2665, U+26A1, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
 }
 
-/* Command block headers (SshTerminal): full terminal width, not columns at block start. */
-.xterm .lt-block {
-  width: 100% !important;
+/* Command cards (termHtml.ts) */
+.lt-out {
+  font:
+    13px / var(--row) "JetBrains Mono",
+    "Symbols Nerd Font Mono",
+    monospace;
+  color: #c9d1d9;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+@keyframes lt-blink {
+  50% {
+    opacity: 0;
+  }
+}
+.lt-blink {
+  animation: lt-blink 1.06s step-end infinite;
 }
 
 @theme {
@@ -28,6 +43,11 @@
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+@utility t-heading {
+  font-size: 20px;
+  line-height: 1.4;
+  font-weight: 600;
+}
 @utility t-section {
   font-size: 15px;
   line-height: 1.3;
@@ -41,6 +61,11 @@
   text-transform: uppercase;
   color: var(--ui-text-dimmed);
 }
+@utility t-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--ui-text-muted);
+}
 
 /* Section card and detail pane beside a list column. */
 @utility card {
@@ -48,6 +73,125 @@
 }
 @utility pane {
   @apply flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-7 pt-5 pb-7;
+}
+/* Settings block */
+@utility box {
+  @apply flex max-w-3xl flex-col card;
+}
+/* Info line, icon first */
+@utility hint {
+  @apply flex items-center gap-2 text-sm text-muted;
+}
+/* Command card strip */
+@utility card-head {
+  @apply sticky top-0 z-[1] flex h-7 items-center gap-3 rounded-t-[10px] bg-sunken px-3 text-[11px] text-dimmed;
+}
+/* data-active: current */
+@utility tab {
+  @apply relative flex shrink-0 items-center gap-2 rounded-t-md border border-b-0 border-transparent text-[13px] text-muted transition-colors hover:bg-muted hover:text-default;
+  &[data-active] {
+    @apply border-default bg-default text-default;
+  }
+}
+
+/* Motion: CSS only, click never waits. Animations replay when v-show shows again: no JS. */
+:root {
+  --lt-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes lt-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@keyframes lt-fade {
+  from {
+    opacity: 0;
+  }
+}
+@utility animate-enter {
+  animation: lt-rise 260ms var(--lt-ease) both;
+}
+@utility animate-fade {
+  animation: lt-fade 120ms ease-out both;
+}
+/* 25ms steps; past eighth all at once */
+:is(.stagger, .pane) > * {
+  animation: lt-rise 260ms var(--lt-ease) both;
+  animation-delay: 175ms;
+}
+:is(.stagger, .pane) > :nth-child(1) {
+  animation-delay: 0ms;
+}
+:is(.stagger, .pane) > :nth-child(2) {
+  animation-delay: 25ms;
+}
+:is(.stagger, .pane) > :nth-child(3) {
+  animation-delay: 50ms;
+}
+:is(.stagger, .pane) > :nth-child(4) {
+  animation-delay: 75ms;
+}
+:is(.stagger, .pane) > :nth-child(5) {
+  animation-delay: 100ms;
+}
+:is(.stagger, .pane) > :nth-child(6) {
+  animation-delay: 125ms;
+}
+:is(.stagger, .pane) > :nth-child(7) {
+  animation-delay: 150ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 1ms !important;
+    transition-delay: 0ms !important;
+  }
+}
+
+/* Home (outer) and terminals (inner) share one grid cell: depth zoom between them. */
+.lt-swap {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+  transition:
+    opacity 260ms 40ms var(--lt-ease),
+    transform 320ms 40ms var(--lt-ease),
+    visibility 0s;
+}
+.lt-swap.off {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 180ms ease-in,
+    transform 220ms ease-in,
+    visibility 0s 220ms;
+}
+.lt-swap.outer.off {
+  transform: scale(1.03);
+}
+.lt-swap.inner.off {
+  transform: scale(0.96);
+}
+
+.screen-enter-active {
+  transition:
+    opacity 260ms ease-out,
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.screen-leave-active {
+  transition: opacity 140ms ease-in;
+}
+.screen-enter-from {
+  opacity: 0;
+  transform: scale(0.985);
+}
+.screen-leave-to {
+  opacity: 0;
 }
 
 /* Design palette on Nuxt UI tokens, so every component picks it up. Dark-only app. */

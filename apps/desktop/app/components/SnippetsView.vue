@@ -60,9 +60,9 @@ const ranOn = (s: Snippet) => `ran on ${runCount(s)} ${runCount(s) === 1 ? "host
       </template>
     </ListColumn>
 
-    <main v-if="draft" class="pane max-w-[760px]">
+    <main v-if="draft" :key="draft.id ?? 'new'" class="pane max-w-[760px]">
       <div class="flex flex-wrap items-center gap-3">
-        <h2 class="text-xl font-semibold">{{ draft.name || "New snippet" }}</h2>
+        <h2 class="t-heading">{{ draft.name || "New snippet" }}</h2>
         <UBadge v-if="draft.id && runCount(draft)" :label="ranOn(draft)" class="font-mono" />
         <div v-if="draft.id" class="ml-auto flex flex-wrap gap-2">
           <UButton
@@ -89,7 +89,7 @@ const ranOn = (s: Snippet) => `ran on ${runCount(s)} ${runCount(s) === 1 ? "host
         </div>
       </div>
 
-      <form class="flex max-w-3xl flex-col gap-4 card p-4" @submit.prevent="submit">
+      <form class="box gap-4 p-4" @submit.prevent="submit">
         <UFormField label="Name">
           <UInput v-model="draft.name" placeholder="Tail app logs" required class="w-full" />
         </UFormField>
@@ -106,7 +106,7 @@ const ranOn = (s: Snippet) => `ran on ${runCount(s)} ${runCount(s) === 1 ? "host
         <UButton type="submit" label="Save" class="self-end" />
       </form>
 
-      <p class="flex items-center gap-2 text-sm text-muted">
+      <p class="hint">
         <UIcon name="i-ph-info-duotone" class="size-[18px]" />
         Run it from the Snippets panel beside any open terminal, or from the ⌘K palette.
       </p>

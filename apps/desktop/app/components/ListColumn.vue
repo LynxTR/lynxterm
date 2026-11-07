@@ -52,7 +52,7 @@ defineExpose({ focus: () => field.value?.inputRef?.focus() });
     </template>
     <template #body>
       <div v-if="empty" class="p-3"><slot name="empty" /></div>
-      <ul v-else class="flex flex-col">
+      <ul v-else class="stagger flex flex-col">
         <slot />
       </ul>
     </template>

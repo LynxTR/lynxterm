@@ -94,13 +94,7 @@ export function ensureHistory(h: Target) {
       key,
       runMetrics(h, "history")
         .then(async (out): Promise<void> => {
-          if (out.startsWith("on")) return;
-          await runMetrics(h, "install");
-          logActivity(h, {
-            kind: "monitoring",
-            title: "Turned on monitoring history",
-            detail: "cron job, ~/.lynxterm/metrics",
-          });
+          if (!out.startsWith("on")) await installHistory(h);
         })
         .catch((e) => {
           logActivity(h, {
@@ -112,4 +106,13 @@ export function ensureHistory(h: Target) {
         }),
     );
   return historyChecks.get(key)!;
+}
+
+export async function installHistory(h: Target) {
+  await runMetrics(h, "install");
+  logActivity(h, {
+    kind: "monitoring",
+    title: "Turned on monitoring history",
+    detail: "cron job, ~/.lynxterm/metrics",
+  });
 }

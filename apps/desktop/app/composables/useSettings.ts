@@ -6,8 +6,9 @@ const defaults = {
   /** Check GitHub for newer release at start and twice a day (useUpdates). */
   checkUpdates: true,
   history: true,
-  /** Command blocks: hooks typed into each new session (SshTerminal). */
-  blocks: true,
+  localEcho: true,
+  /** raw: plain, no hooks typed */
+  terminalStyle: "blocks" as "blocks" | "plain" | "raw",
   /** Minutes between each sync section's turns (SYNC_SECTIONS). */
   syncEvery: { hosts: 5, snippets: 60, history: 1440, activity: 60 } as Record<string, number>,
   /** Saved host ids user stopped watching (isWatched). */
@@ -30,15 +31,20 @@ const defaults = {
 
 // Settings added in later versions, rules included, get their defaults.
 const settings = useLocalStorage("lynxterm:settings", defaults, {
-  mergeDefaults: (saved, d) => ({
-    ...d,
-    ...saved,
-    monitoring: {
-      ...d.monitoring,
-      ...saved.monitoring,
-      rules: { ...d.monitoring.rules, ...saved.monitoring?.rules },
-    },
-  }),
+  mergeDefaults: (saved, d) => {
+    // Old `blocks: false` = raw. Key dropped: migrates once.
+    const { blocks, ...rest } = saved as typeof saved & { blocks?: boolean };
+    return {
+      ...d,
+      ...rest,
+      ...(blocks === false && { terminalStyle: "raw" as const }),
+      monitoring: {
+        ...d.monitoring,
+        ...rest.monitoring,
+        rules: { ...d.monitoring.rules, ...rest.monitoring?.rules },
+      },
+    };
+  },
 }).value;
 
 export const useSettings = () => settings;
@@ -67,7 +73,8 @@ export function maskHost(host: string) {
 
 export type View = "hosts" | "keychain" | "snippets" | "forwards" | "known" | "settings";
 
-export const useView = () => useState<View>("view", () => "hosts");
+const view = ref<View>("hosts");
+export const useView = () => view;
 
 type Section = "sync" | "groups" | "terminal" | "monitoring" | "privacy" | "about";
 export const useSettingsSection = () => useState<Section>("settingsSection", () => "sync");

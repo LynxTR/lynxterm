@@ -73,12 +73,8 @@ async function setNotify(on: boolean) {
           Each login shows in the server's auth logs and keeps one sshd (about 5 MB).
         </span>
       </div>
-      <ul class="flex flex-col card">
-        <li
-          v-for="h in listed"
-          :key="h.id"
-          class="flex min-h-12 items-center gap-3 border-t border-default px-4 py-2 first:border-t-0"
-        >
+      <ul class="card divide-y divide-default">
+        <li v-for="h in listed" :key="h.id" class="flex min-h-12 items-center gap-3 px-4 py-2">
           <USwitch
             :model-value="isWatched(h)"
             :disabled="!h.keyId"
@@ -104,7 +100,7 @@ async function setNotify(on: boolean) {
           />
         </li>
         <li v-if="!hosts.length" class="px-4 py-3 text-sm text-muted">No saved hosts yet.</li>
-        <li v-if="hosts.length > 6" class="flex justify-center border-t border-default py-1.5">
+        <li v-if="hosts.length > 6" class="flex justify-center py-1.5">
           <UButton
             :label="showAll ? 'Show fewer' : `Show all ${hosts.length}`"
             size="xs"
@@ -148,11 +144,11 @@ async function setNotify(on: boolean) {
           @update:model-value="(id: string) => edit(id)"
         />
       </div>
-      <ul v-if="overrideHosts.length" class="flex flex-col card">
+      <ul v-if="overrideHosts.length" class="card divide-y divide-default">
         <li
           v-for="h in overrideHosts"
           :key="h.id"
-          class="flex min-h-12 flex-wrap items-center gap-3 border-t border-default px-4 py-2 first:border-t-0"
+          class="flex min-h-12 flex-wrap items-center gap-3 px-4 py-2"
         >
           <span
             class="size-2 shrink-0 rounded-full"
@@ -179,14 +175,14 @@ async function setNotify(on: boolean) {
 
     <section class="flex flex-col gap-2.5">
       <h3 class="t-section">When an alert fires</h3>
-      <ul class="flex flex-col card">
+      <ul class="card divide-y divide-default">
         <li class="flex min-h-11 items-center gap-3 px-4 py-2">
           <span class="flex-1 text-sm"
             >Mark the host's card red and add the alert to its activity</span
           >
           <UBadge label="always" size="sm" class="font-mono" />
         </li>
-        <li class="flex min-h-11 items-center gap-3 border-t border-default px-4 py-2">
+        <li class="flex min-h-11 items-center gap-3 px-4 py-2">
           <span class="flex-1 text-sm">Show a notification</span>
           <USwitch
             :model-value="m.notify"
@@ -194,7 +190,7 @@ async function setNotify(on: boolean) {
             @update:model-value="setNotify"
           />
         </li>
-        <li class="flex min-h-11 items-center gap-3 border-t border-default px-4 py-2">
+        <li class="flex min-h-11 items-center gap-3 px-4 py-2">
           <span class="flex-1 text-sm">
             Snooze length
             <span class="block text-xs text-muted">From the host's menu while it has an alert</span>
@@ -210,7 +206,7 @@ async function setNotify(on: boolean) {
       </ul>
     </section>
 
-    <p class="flex items-center gap-2 text-sm text-muted">
+    <p class="hint">
       <UIcon name="i-ph-info-duotone" class="size-[18px]" />
       Saved on this device only. 7-day history is set per host, in its Monitor panel.
     </p>
@@ -227,7 +223,7 @@ async function setNotify(on: boolean) {
         </div>
       </template>
       <template #footer>
-        <UButton label="Done" class="ml-auto" @click="editorOpen = false" />
+        <UButton label="Done" @click="editorOpen = false" />
       </template>
     </UModal>
   </div>

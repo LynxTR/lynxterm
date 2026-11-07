@@ -16,22 +16,6 @@ async function signIn() {
   if (!signedOut.value) password.value = "";
 }
 
-const STORED = [
-  "Encrypted items",
-  "Item kind",
-  "Revision",
-  "Device tokens (hashed)",
-  "KDF salt and settings",
-  "Wrapped vault key",
-];
-const NEVER = [
-  "Your master password",
-  "Private keys",
-  "Passphrases",
-  "Hostnames, users or IPs in the clear",
-  "Your terminal traffic",
-];
-
 // Recheck after each sync while open, so Cloudflare changes show.
 watch([url, busy], ([u, b]) => u && !b && sync.refreshStatus(), { immediate: true });
 
@@ -63,11 +47,7 @@ const checks = computed(() => {
       />
     </div>
 
-    <form
-      v-if="url && signedOut"
-      class="flex max-w-3xl flex-col gap-3 card p-4"
-      @submit.prevent="signIn"
-    >
+    <form v-if="url && signedOut" class="box gap-3 p-4" @submit.prevent="signIn">
       <div class="flex flex-col gap-1.5">
         <h3 class="t-section">Sign in again</h3>
         <p class="text-sm text-muted">
@@ -122,7 +102,7 @@ const checks = computed(() => {
       </div>
     </div>
 
-    <div v-if="url" class="flex max-w-3xl flex-col card">
+    <div v-if="url" class="box">
       <div class="flex flex-col gap-1.5 border-b border-default p-4">
         <h3 class="t-section">What syncs, and how often</h3>
         <p class="text-sm text-muted">
@@ -135,7 +115,7 @@ const checks = computed(() => {
       <SyncSections show-next class="px-4 py-1" />
     </div>
 
-    <div v-else class="flex max-w-3xl flex-col gap-4 card p-4">
+    <div v-else class="box gap-4 p-4">
       <p class="text-sm text-muted">
         Keep your vault in sync across devices through a Cloudflare Worker on your own account. It
         fits in the free plan and only ever stores encrypted blobs.
@@ -151,25 +131,5 @@ const checks = computed(() => {
       :title="error"
       class="max-w-3xl"
     />
-
-    <aside class="flex max-w-3xl flex-col gap-3.5 card p-4">
-      <div class="flex items-center gap-2">
-        <UIcon name="i-ph-eye-duotone" class="size-[18px] text-info" />
-        <span class="t-label">What your worker sees</span>
-      </div>
-      <p class="text-[13px]">Rows of ciphertext with a revision number. That's it.</p>
-      <div class="flex flex-col gap-1.5 text-[13px]">
-        <span class="font-medium text-success">Stored</span>
-        <div class="flex flex-wrap gap-1.5">
-          <UBadge v-for="item in STORED" :key="item" :label="item" variant="subtle" />
-        </div>
-      </div>
-      <div class="flex flex-col gap-1.5 text-[13px]">
-        <span class="font-medium text-error">Never</span>
-        <div class="flex flex-wrap gap-1.5">
-          <UBadge v-for="item in NEVER" :key="item" :label="item" variant="subtle" />
-        </div>
-      </div>
-    </aside>
   </div>
 </template>

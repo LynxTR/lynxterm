@@ -66,17 +66,15 @@ async function erase() {
       </form>
     </template>
     <template #footer>
-      <div class="flex w-full justify-end gap-2">
-        <UButton label="Cancel" color="neutral" variant="ghost" @click="open = false" />
-        <UButton
-          type="submit"
-          form="erase-form"
-          label="Erase and start over"
-          color="error"
-          :loading="busy"
-          :disabled="!password"
-        />
-      </div>
+      <UButton label="Cancel" color="neutral" variant="ghost" @click="open = false" />
+      <UButton
+        type="submit"
+        form="erase-form"
+        label="Erase and start over"
+        color="error"
+        :loading="busy"
+        :disabled="!password"
+      />
     </template>
   </UModal>
 </template>

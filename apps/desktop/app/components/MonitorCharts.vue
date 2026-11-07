@@ -47,27 +47,11 @@ const optOut = (on: boolean) => {
 
 async function install() {
   optOut(false);
-  busy.value = true;
-  try {
-    await runMetrics(props.target, "install");
+  await withBusy(busy, async () => {
+    await installHistory(props.target);
     keeping.value = true;
     toast.add({ title: "Keeping 7 days of history on this server", icon: "i-ph-check" });
-    log({
-      kind: "monitoring",
-      title: "Turned on monitoring history",
-      detail: "cron job, ~/.lynxterm/metrics",
-    });
-  } catch (e) {
-    toast.add({ title: String(e), color: "error" });
-    log({
-      kind: "monitoring",
-      title: "Turning on monitoring history failed",
-      detail: String(e),
-      ok: false,
-    });
-  } finally {
-    busy.value = false;
-  }
+  });
 }
 
 async function remove() {
@@ -151,35 +135,26 @@ const slotted = (value: (s: Sample) => number | undefined) =>
   bridge(buckets(samples.value, value, from.value, to.value, slots.value), gap.value);
 const series = computed(() => charts.map((c) => slotted(c.value)));
 
-// Step line, flat across each slot so even single slot shows; broken where no data.
-function path(values: (number | null)[], max = 100) {
-  let d = "";
-  let pen = false;
+// Step line, flat per slot (single slot still shows), broken on gaps.
+function runs(values: (number | null)[], max: number) {
+  const all: { from: number; to: number; d: string }[] = [];
   values.forEach((v, i) => {
-    if (v === null) return (pen = false);
+    if (v === null) return;
     const y = 100 - Math.min(100, (100 * v) / max);
-    d += `${pen ? "L" : "M"}${i} ${y}L${i + 1} ${y}`;
-    pen = true;
+    const last = all.at(-1);
+    if (last?.to === i) Object.assign(last, { to: i + 1, d: `${last.d}L${i} ${y}L${i + 1} ${y}` });
+    else all.push({ from: i, to: i + 1, d: `${i} ${y}L${i + 1} ${y}` });
   });
-  return d;
+  return all;
 }
-/** Same line closed down to floor, one shape per unbroken run. */
-function area(values: (number | null)[], max = 100) {
-  let d = "";
-  let start = -1;
-  values.forEach((v, i) => {
-    if (v !== null) {
-      const y = 100 - Math.min(100, (100 * v) / max);
-      d += `${start < 0 ? `M${i} 100` : ""}L${i} ${y}L${i + 1} ${y}`;
-      if (start < 0) start = i;
-    }
-    if (start >= 0 && (v === null || i === values.length - 1)) {
-      d += `L${v === null ? i : i + 1} 100Z`;
-      start = -1;
-    }
-  });
-  return d;
-}
+const path = (values: (number | null)[], max = 100) =>
+  runs(values, max)
+    .map((r) => `M${r.d}`)
+    .join("");
+const area = (values: (number | null)[], max = 100) =>
+  runs(values, max)
+    .map((r) => `M${r.from} 100L${r.d}L${r.to} 100Z`)
+    .join("");
 
 // Network: two lines in Mb/s, scaled to busiest slot. At least 1 Mb/s so idle link stays near
 // floor instead of filling chart.

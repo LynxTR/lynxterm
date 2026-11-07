@@ -49,7 +49,7 @@ const mem = computed(() => (props.last ? Math.round(memPct(props.last)) : 0));
               {{ t }}
             </span>
           </span>
-          <span class="block truncate font-mono text-[11px] text-muted">{{ hostLabel(host) }}</span>
+          <span class="block truncate t-sub">{{ hostLabel(host) }}</span>
         </span>
 
         <span v-if="last" class="flex shrink-0 items-center gap-2">

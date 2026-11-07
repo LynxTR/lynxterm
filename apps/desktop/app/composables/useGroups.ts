@@ -118,7 +118,7 @@ export function useGroups() {
     if (!to || to === from) return;
     await editHosts(
       (h) => !!h.tags?.includes(from),
-      (h) => ({ tags: h.tags!.map((t) => (t === from ? to : t)) }),
+      (h) => ({ tags: [...new Set(h.tags!.map((t) => (t === from ? to : t)))] }),
     );
   };
 

@@ -167,7 +167,7 @@ function finish() {
           >
             {{ h.name }}
           </span>
-          <span class="truncate font-mono text-[11px] text-muted">
+          <span class="truncate t-sub">
             {{ h.user }}@{{ h.host }}{{ h.port === 22 ? "" : `:${h.port}` }}
           </span>
           <UBadge

@@ -46,7 +46,10 @@ const updateLine = computed(() => {
       </button>
     </nav>
 
-    <main class="flex max-w-[920px] min-w-0 flex-1 flex-col gap-6 overflow-y-auto px-8 pt-6 pb-8">
+    <main
+      :key="section"
+      class="flex max-w-[920px] min-w-0 flex-1 stagger flex-col gap-6 overflow-y-auto px-8 pt-6 pb-8"
+    >
       <SyncPanel v-if="section === 'sync'" />
       <GroupsSettings v-else-if="section === 'groups'" />
       <TerminalSettings v-else-if="section === 'terminal'" />
@@ -55,14 +58,14 @@ const updateLine = computed(() => {
 
       <template v-else-if="section === 'privacy'">
         <h2 class="t-title">Privacy</h2>
-        <div class="flex max-w-3xl flex-col gap-4 card p-4">
+        <div class="box gap-4 p-4">
           <USwitch
             v-model="settings.maskAddresses"
             label="Hide the middle of addresses"
             description="Shows 10.•.•.12 and bastion.•.net instead of full addresses in lists, tabs and status bars. Handy when sharing your screen."
           />
         </div>
-        <p class="flex items-center gap-2 text-sm text-muted">
+        <p class="hint">
           <UIcon name="i-ph-info-duotone" class="size-[18px]" />
           Saved on this device only.
         </p>
@@ -92,7 +95,7 @@ const updateLine = computed(() => {
             </template>
           </dl>
         </div>
-        <div class="flex max-w-3xl flex-col gap-3 card p-4">
+        <div class="box gap-3 p-4">
           <div class="flex flex-wrap items-center gap-3">
             <div class="flex min-w-60 flex-1 flex-col gap-1">
               <span class="font-medium">Updates</span>

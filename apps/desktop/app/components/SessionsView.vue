@@ -1,16 +1,6 @@
 <script setup lang="ts">
-const {
-  tabs,
-  current,
-  focusedPane,
-  activePane,
-  isSplit,
-  toggleSplit,
-  closePane,
-  asking,
-  start,
-  panel,
-} = useSessions();
+const { tabs, current, focusedPane, activePane, isSplit, toggleSplit, closePane, panel } =
+  useSessions();
 
 // Shortcut: Ctrl plus `keys`.
 const tool = (
@@ -57,13 +47,6 @@ watch(
   () => tabs.value.flatMap((t) => t.panes).filter((p) => p.session !== undefined),
   (panes) => panes.forEach((p) => detectOs(p.target)),
 );
-
-const password = ref("");
-function connectWithPassword() {
-  start({ ...asking.value!, password: password.value });
-  asking.value = null;
-  password.value = "";
-}
 </script>
 
 <template>
@@ -73,7 +56,7 @@ function connectWithPassword() {
       v-for="t in tabs"
       v-show="t.key === current"
       :key="t.key"
-      class="flex min-w-0 flex-1 divide-x divide-default overflow-hidden"
+      class="flex min-w-0 flex-1 animate-fade divide-x divide-default overflow-hidden"
     >
       <div v-for="p in t.panes" :key="p.key" class="flex min-w-0 flex-1 flex-col overflow-hidden">
         <SshTerminal
@@ -87,34 +70,40 @@ function connectWithPassword() {
       </div>
     </div>
 
-    <Transition
-      enter-active-class="transition duration-150 ease-out"
-      enter-from-class="translate-x-6 opacity-0"
-      leave-active-class="transition duration-100 ease-in"
-      leave-to-class="translate-x-6 opacity-0"
-      mode="out-in"
+    <!-- width animates, panel keeps 340px: no snap -->
+    <div
+      class="flex shrink-0 justify-start overflow-hidden transition-[width] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+      :style="{ width: panel ? '340px' : '0px' }"
     >
-      <SftpPanel
-        v-if="panel === 'sftp'"
-        :session="activePane?.session"
-        :target="activePane?.target"
-        @close="panel = null"
-      />
-      <ToolPanel
-        v-else-if="panel === 'monitor'"
-        title="Monitor"
-        :chip="activePane?.target && hostName(activePane.target)"
-        @close="panel = null"
+      <Transition
+        enter-active-class="transition-opacity duration-150 ease-out"
+        enter-from-class="opacity-0"
+        leave-active-class="transition-opacity duration-200 ease-in"
+        leave-to-class="opacity-0"
+        mode="out-in"
       >
-        <MonitorCharts v-if="activePane?.target" :target="activePane.target" />
-      </ToolPanel>
-      <SnippetsPanel v-else-if="panel === 'snippets'" @close="panel = null" />
-      <ForwardsPanel
-        v-else-if="panel === 'forwards'"
-        :target="activePane?.target"
-        @close="panel = null"
-      />
-    </Transition>
+        <SftpPanel
+          v-if="panel === 'sftp'"
+          :session="activePane?.session"
+          :target="activePane?.target"
+          @close="panel = null"
+        />
+        <ToolPanel
+          v-else-if="panel === 'monitor'"
+          title="Monitor"
+          :chip="activePane?.target && hostName(activePane.target)"
+          @close="panel = null"
+        >
+          <MonitorCharts v-if="activePane?.target" :target="activePane.target" />
+        </ToolPanel>
+        <SnippetsPanel v-else-if="panel === 'snippets'" @close="panel = null" />
+        <ForwardsPanel
+          v-else-if="panel === 'forwards'"
+          :target="activePane?.target"
+          @close="panel = null"
+        />
+      </Transition>
+    </div>
 
     <nav
       aria-label="Terminal tools"
@@ -142,20 +131,5 @@ function connectWithPassword() {
         </UTooltip>
       </template>
     </nav>
-
-    <UModal
-      :open="asking !== null"
-      :title="`Password for ${asking ? hostLabel(asking) : ''}`"
-      @update:open="!$event && ((asking = null), (password = ''))"
-    >
-      <template #body>
-        <form id="password-form" @submit.prevent="connectWithPassword">
-          <UInput v-model="password" type="password" autofocus required class="w-full" />
-        </form>
-      </template>
-      <template #footer>
-        <UButton type="submit" form="password-form" label="Connect" icon="i-ph-terminal-duotone" />
-      </template>
-    </UModal>
   </div>
 </template>

@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Lynxterm",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "com.lynxterm.desktop",
   "build": {
     "frontendDist": "../.output/public",
@@ -17,7 +17,8 @@
         "height": 800,
         "minWidth": 900,
         "minHeight": 560,
-        "decorations": false
+        "decorations": false,
+        "backgroundColor": "#0b0d10"
       }
     ]
   },

@@ -45,7 +45,7 @@ const password = ref("");
 function toggle() {
   const id = draft.value!.id!;
   if (isRunning.value) return withBusy(busy, () => stop(id));
-  if (draftHost.value?.keyId) return withBusy(busy, () => start(id));
+  if (draftHost.value && !asksPassword(draftHost.value)) return withBusy(busy, () => start(id));
   password.value = "";
   asking.value = true;
 }
@@ -117,9 +117,9 @@ async function forget() {
       </template>
     </ListColumn>
 
-    <main v-if="draft" class="pane max-w-[760px]">
+    <main v-if="draft" :key="draft.id ?? 'new'" class="pane max-w-[760px]">
       <div class="flex flex-wrap items-center gap-3">
-        <h2 class="text-xl font-semibold">{{ draft.id ? title(draft) : "New forward" }}</h2>
+        <h2 class="t-heading">{{ draft.id ? title(draft) : "New forward" }}</h2>
         <UBadge
           v-if="draft.id"
           :label="isRunning ? 'running' : 'stopped'"
@@ -160,7 +160,7 @@ async function forget() {
         </p>
       </div>
 
-      <form class="flex max-w-3xl flex-col gap-4 card p-4" @submit.prevent="submit">
+      <form class="box gap-4 p-4" @submit.prevent="submit">
         <div class="grid grid-cols-[repeat(auto-fit,minmax(min(220px,100%),1fr))] gap-4">
           <UFormField label="Name" hint="Optional">
             <UInput v-model="draft.name" placeholder="Postgres on db-primary" class="w-full" />

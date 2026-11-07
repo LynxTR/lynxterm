@@ -6,7 +6,12 @@ export type SavedHost = Omit<SshTarget, "password"> & {
   group?: string;
   os?: string;
   tags?: string[];
+  /** Password in vault; value never leaves Rust. */
+  savedPassword?: boolean;
 };
+
+export const asksPassword = (h: { keyId: string; savedPassword?: boolean }) =>
+  !h.keyId && !h.savedPassword;
 
 export const normalizeTag = (t: string) =>
   t
@@ -32,7 +37,7 @@ export function parseTarget(text: string) {
   return m ? { user: m[1]!, host: m[2]!, port: Number(m[3] ?? 22), keyId: "" } : null;
 }
 
-// Explicit fields so typed password never stored.
+// Explicit fields: password only via host_password_save.
 export const hostSave = ({ id, name, group, host, port, user, keyId, os, tags }: SavedHost) =>
   invoke("host_save", {
     host: {

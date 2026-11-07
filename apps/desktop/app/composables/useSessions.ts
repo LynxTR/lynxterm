@@ -7,7 +7,7 @@ type Pane = { key: number; target: SshTarget; state: SessionState; session?: num
 export type Tab = { key: number; panes: Pane[] };
 
 const tabs = ref<Tab[]>([]);
-/** null is Vault tab. */
+/** null is Home. */
 const current = ref<number | null>(null);
 const focusedPane = ref<number | null>(null);
 let nextKey = 0;
@@ -56,12 +56,7 @@ function toggleSplit() {
   focusedPane.value = second.key;
 }
 
-// Keyless hosts ask password each time (SessionsView); never stored.
-const asking = ref<SavedHost | null>(null);
-function connect(h: SavedHost) {
-  if (h.keyId) start({ ...h, password: "" });
-  else asking.value = h;
-}
+const connect = (h: SavedHost) => start({ ...h, password: "" });
 
 // Tool panel beside terminals (SessionsView), one at a time.
 type Panel = "sftp" | "monitor" | "snippets" | "forwards";
@@ -82,7 +77,6 @@ function runSnippet(s: { name: string; command: string }) {
 function closeAll() {
   tabs.value = [];
   current.value = null;
-  asking.value = null;
 }
 
 export const useSessions = () => ({
@@ -91,8 +85,6 @@ export const useSessions = () => ({
   focusedPane,
   activePane,
   sessionFor,
-  start,
-  asking,
   connect,
   openFiles,
   panel,

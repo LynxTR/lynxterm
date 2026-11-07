@@ -52,17 +52,15 @@ watch(open, (o) => o && refreshStatus());
       </div>
     </template>
     <template #footer>
-      <div class="flex w-full justify-end gap-2">
-        <UButton v-if="newDevices === false" label="Done" @click="open = false" />
-        <template v-else>
-          <UButton label="Not now" color="neutral" variant="ghost" @click="open = false" />
-          <UButton
-            label="Open Cloudflare"
-            trailing-icon="i-ph-arrow-square-out"
-            @click="openExternal(CLOUDFLARE)"
-          />
-        </template>
-      </div>
+      <UButton v-if="newDevices === false" label="Done" @click="open = false" />
+      <template v-else>
+        <UButton label="Not now" color="neutral" variant="ghost" @click="open = false" />
+        <UButton
+          label="Open Cloudflare"
+          trailing-icon="i-ph-arrow-square-out"
+          @click="openExternal(CLOUDFLARE)"
+        />
+      </template>
     </template>
   </UModal>
 </template>

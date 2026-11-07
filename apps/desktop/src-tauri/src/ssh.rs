@@ -14,6 +14,7 @@ use tokio::sync::mpsc::{UnboundedSender, unbounded_channel};
 
 use crate::hosts::Host;
 use crate::vault::Vault;
+use zeroize::Zeroizing;
 
 pub type Handle = client::Handle<Client>;
 
@@ -92,7 +93,7 @@ pub fn describe(e: russh::Error) -> String {
     }
 }
 
-/// Connects, authenticates: password if given, else vault key.
+/// Auth order: given password, vault key, saved password.
 pub async fn connect(
     vault: &Vault,
     host: &str,
@@ -104,12 +105,24 @@ pub async fn connect(
 ) -> Result<Handle, String> {
     let config = Arc::new(client::Config {
         keepalive_interval: Some(Duration::from_secs(30)),
+        // Nagle off (as OpenSSH): else each keystroke waits previous ack.
+        nodelay: true,
         ..Default::default()
     });
     let handler = Client {
         host: host.into(),
         port,
         trust,
+    };
+    let saved;
+    let password = if password.is_empty() && key_id.is_empty() {
+        saved = Zeroizing::new(crate::hosts::saved_password(vault, host, port, user)?);
+        if saved.is_empty() {
+            return Err("Authentication failed".into());
+        }
+        saved.as_str()
+    } else {
+        password
     };
     let mut session = client::connect(config, (host, port), handler)
         .await

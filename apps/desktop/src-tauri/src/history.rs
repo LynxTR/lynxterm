@@ -114,14 +114,6 @@ pub async fn shell_integration_host(
         .map(drop)
 }
 
-#[tauri::command]
-pub async fn shell_integration_install(
-    sessions: State<'_, Sessions>,
-    id: u32,
-) -> Result<(), String> {
-    ssh::exec(&*sessions.handle(id)?, INSTALL).await.map(drop)
-}
-
 #[cfg(test)]
 mod tests {
     use super::{INSTALL, REMOVE};

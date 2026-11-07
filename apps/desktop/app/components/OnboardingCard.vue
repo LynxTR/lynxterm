@@ -9,10 +9,15 @@ const steps = ["Welcome", "Vault", "Sync", "Hosts"].map((title) => ({ title }));
   >
     <div
       data-tauri-drag-region
-      class="flex h-10 shrink-0 items-stretch border-b border-default bg-sunken"
-      :class="isMac && 'pl-[76px]'"
+      class="flex h-11 shrink-0 items-stretch border-b border-default bg-sunken"
+      :class="isMac && 'pl-20'"
     >
-      <span data-tauri-drag-region class="flex items-center px-3.5">
+      <!-- same bar as app.vue header -->
+      <span
+        data-tauri-drag-region
+        class="flex items-center px-3.5 pt-1.5"
+        :class="isMac && 'order-last'"
+      >
         <img src="/logo.svg" alt="Lynxterm" class="size-5" />
       </span>
       <div data-tauri-drag-region class="ml-auto flex items-stretch"><WindowControls /></div>

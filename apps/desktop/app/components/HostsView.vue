@@ -83,7 +83,7 @@ const editing = ref<SavedHost | null>(null);
 const isNew = computed(() => !!editing.value && !editing.value.id);
 const watchNew = ref(true);
 const keyItems = computed(() => [
-  { label: "Password, asked each time", value: "none" },
+  { label: "Password", value: "none" },
   ...keys.value.map((k) => ({ label: k.name, value: k.id })),
 ]);
 const keyChoice = computed({
@@ -283,7 +283,7 @@ const hostMenu = (h: SavedHost) => [
 
     <main v-if="editing" class="pane max-w-[860px]">
       <div class="flex items-center gap-3">
-        <h2 class="truncate text-xl font-semibold">
+        <h2 class="t-heading truncate">
           {{ isNew ? "New host" : `Edit ${hostName(editing)}` }}
         </h2>
         <UButton

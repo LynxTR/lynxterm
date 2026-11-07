@@ -52,11 +52,6 @@ async function saveTag() {
   await renameTag(renamingTag.value, tagDraft.value);
   renamingTag.value = "";
 }
-const mergeItems = (from: string) => [
-  tags.value
-    .filter((t) => t.name !== from)
-    .map((t) => ({ label: t.name, onSelect: () => renameTag(from, t.name) })),
-];
 async function forgetTag(t: { name: string; hosts: number }) {
   const ok = await askConfirm({
     title: `Delete tag ${t.name}?`,
@@ -84,11 +79,11 @@ async function forgetTag(t: { name: string; hosts: number }) {
           Drag to reorder: this is the order of the chips on Hosts
         </span>
       </div>
-      <ul class="flex flex-col card">
+      <ul class="card divide-y divide-default">
         <li
           v-for="(g, i) in names"
           :key="g"
-          class="flex min-h-12 flex-wrap items-center gap-3 border-t border-default px-3 py-2 first:border-t-0"
+          class="flex min-h-12 flex-wrap items-center gap-3 px-3 py-2"
           :class="[
             editing === g && 'bg-elevated',
             over === i && dragging && dragging !== g && 'shadow-[inset_0_2px_0_var(--ui-primary)]',
@@ -168,7 +163,7 @@ async function forgetTag(t: { name: string; hosts: number }) {
             <UButton label="Delete" size="xs" color="neutral" variant="ghost" @click="forget(g)" />
           </template>
         </li>
-        <li class="border-t border-default px-3 py-2" :class="!names.length && 'border-t-0'">
+        <li class="px-3 py-2">
           <form class="flex items-center gap-2.5" @submit.prevent="add">
             <span class="size-3.5 shrink-0 rounded-full border border-dashed border-accented" />
             <UInput
@@ -199,11 +194,11 @@ async function forgetTag(t: { name: string; hosts: number }) {
           class="ml-auto w-48"
         />
       </div>
-      <ul v-if="shownTags.length" class="flex flex-col card">
+      <ul v-if="shownTags.length" class="card divide-y divide-default">
         <li
           v-for="t in shownTags"
           :key="t.name"
-          class="flex min-h-11 flex-wrap items-center gap-3 border-t border-default px-4 py-1.5 first:border-t-0"
+          class="flex min-h-11 flex-wrap items-center gap-3 px-4 py-1.5"
         >
           <form
             v-if="renamingTag === t.name"
@@ -238,15 +233,6 @@ async function forgetTag(t: { name: string; hosts: number }) {
               variant="ghost"
               @click="((renamingTag = t.name), (tagDraft = t.name))"
             />
-            <UDropdownMenu :items="mergeItems(t.name)" :content="{ align: 'end' }">
-              <UButton
-                label="Merge into…"
-                size="xs"
-                color="neutral"
-                variant="ghost"
-                :disabled="tags.length < 2"
-              />
-            </UDropdownMenu>
             <UButton
               label="Delete"
               size="xs"
@@ -262,7 +248,7 @@ async function forgetTag(t: { name: string; hosts: number }) {
       </p>
       <p class="text-xs text-muted">
         Add tags in the host editor: type one and press Enter. Tags are lowercase, with dashes for
-        spaces. Merge moves every host from one tag to another.
+        spaces. Renaming a tag to one that exists merges them.
       </p>
     </section>
   </div>

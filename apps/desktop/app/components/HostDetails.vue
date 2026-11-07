@@ -11,7 +11,6 @@ const { keys } = useKeys();
 const { knownHosts } = useKnownHosts();
 const settings = useSettings();
 
-const logo = computed(() => osLogo(props.host.os));
 const stream = computed(() => liveOf(props.host));
 const alerts = computed(() => alertsFor(props.host));
 const open = computed(() => sessionFor(props.host) !== undefined);
@@ -34,6 +33,11 @@ const status = computed(() => {
     return { label: "online", tone: "text-success ring-success/30" };
   return { label: "connecting", tone: "" };
 });
+
+function forgetPassword() {
+  const { host, port, user } = props.host;
+  invoke("host_password_save", { host, port, user, password: "" }).then(useHosts().refresh);
+}
 
 const keyName = computed(() => keys.value.find((k) => k.id === props.host.keyId)?.name);
 /** ~/.ssh/known_hosts line under host's name; none if names hashed. */
@@ -75,19 +79,10 @@ function when(at: number) {
 <template>
   <main class="pane max-w-[860px]">
     <header class="flex flex-wrap items-center gap-3.5">
-      <span
-        class="flex size-11 shrink-0 items-center justify-center rounded-[10px]"
-        :class="logo ? '' : 'bg-elevated text-muted'"
-        :style="logo && { backgroundColor: logo.bg, color: logo.dark ? '#1a1200' : '#fff' }"
-        role="img"
-        :aria-label="host.os || 'Unknown system'"
-      >
-        <Icon v-if="logo" :name="logo.icon" :customize="false" class="size-6" />
-        <UIcon v-else name="i-ph-hard-drives-duotone" class="size-6" />
-      </span>
+      <HostLogo :os="host.os" />
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-2">
-          <h2 class="truncate text-xl font-semibold">{{ hostName(host) }}</h2>
+          <h2 class="t-heading truncate">{{ hostName(host) }}</h2>
           <HostChip v-if="host.group" :label="host.group" :group="host.group" />
           <UBadge :label="status.label" size="sm" class="font-mono" :class="status.tone" />
         </div>
@@ -128,8 +123,8 @@ function when(at: number) {
       <div v-else class="flex flex-col gap-1 text-sm">
         <span class="font-medium">Live only while a terminal is open</span>
         <span class="text-muted">
-          This host signs in with a password, which Lynxterm never stores, so it can't sample in the
-          background. Connect to see its usage here.
+          This host signs in with a password, so Lynxterm doesn't sample it in the background.
+          Connect to see its usage here.
         </span>
       </div>
     </section>
@@ -141,7 +136,19 @@ function when(at: number) {
           <dt class="text-muted">Address</dt>
           <dd class="truncate font-mono text-xs">{{ hostLabel(host) }}</dd>
           <dt class="text-muted">Sign in with</dt>
-          <dd>{{ keyName ? `Key ${keyName}` : "Password, asked each time" }}</dd>
+          <dd v-if="keyName">Key {{ keyName }}</dd>
+          <dd v-else-if="host.savedPassword" class="flex items-center gap-2">
+            Password, saved
+            <UButton
+              label="Forget"
+              size="xs"
+              color="neutral"
+              variant="ghost"
+              class="-my-1"
+              @click="forgetPassword"
+            />
+          </dd>
+          <dd v-else>Password, asked each time</dd>
           <template v-if="host.os">
             <dt class="text-muted">System</dt>
             <dd class="capitalize">{{ host.os }}</dd>
@@ -208,12 +215,9 @@ function when(at: number) {
           }}</span>
           <span class="min-w-0 flex-1">
             <span :class="a.ok === false && 'text-error'">{{ a.title }}</span>
-            <span
-              v-if="a.detail"
-              class="block truncate font-mono text-[11px] text-muted"
-              :title="a.detail"
-              >{{ a.detail }}</span
-            >
+            <span v-if="a.detail" class="block truncate t-sub" :title="a.detail">{{
+              a.detail
+            }}</span>
           </span>
         </li>
         <li v-if="!activity.length" class="text-muted">

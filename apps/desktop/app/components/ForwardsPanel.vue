@@ -60,7 +60,7 @@ async function add(andStart: boolean) {
           >
             <span class="min-w-0 flex-1">
               <span class="block truncate text-sm font-medium">{{ f.name }}</span>
-              <span class="mt-1 flex items-center gap-1.5 font-mono text-[11px] text-muted">
+              <span class="t-sub mt-1 flex items-center gap-1.5">
                 <UBadge :label="`localhost:${f.localPort}`" size="sm" />
                 <span>-></span>
                 <UBadge :label="`${f.remoteHost}:${f.remotePort}`" size="sm" />
@@ -77,9 +77,11 @@ async function add(andStart: boolean) {
               color="neutral"
               variant="outline"
               :loading="busy === f.id"
-              :disabled="!host.keyId && !isRunning(f)"
+              :disabled="asksPassword(host) && !isRunning(f)"
               :title="
-                !host.keyId ? 'Password hosts start forwards from the Port forwarding page' : ''
+                asksPassword(host)
+                  ? 'Password hosts start forwards from the Port forwarding page'
+                  : ''
               "
               @click="toggle(f)"
             />

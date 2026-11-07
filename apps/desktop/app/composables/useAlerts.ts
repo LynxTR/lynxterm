@@ -34,12 +34,12 @@ export function describeRule(metric: Metric, r: Rule) {
   const { short } = METRICS.find((x) => x.id === metric)!;
   if (!r.on) return `${short} off`;
   if (metric === "unreachable") return `${short} ${r.for} min`;
-  return `${short} ${threshold(metric, r)}, ${r.for ? `${r.for} min` : "at once"}`;
+  return `${short} ${fmt(metric, r.above)}, ${r.for ? `${r.for} min` : "at once"}`;
 }
 
-function threshold(metric: Metric, r: Rule) {
+function fmt(metric: Metric, v: number | string) {
   const { unit } = METRICS.find((x) => x.id === metric)!;
-  return unit === "%" ? `${r.above}%` : `${r.above} ${unit}`;
+  return unit === "%" ? `${v}%` : `${v} ${unit}`;
 }
 
 type Alert = { metric: Metric; label: string; value: string };
@@ -60,11 +60,6 @@ function valueOf(metric: (typeof SAMPLED)[number], s: Sample) {
   if (metric === "disk") return s.disk;
   if (metric === "load") return s.load !== undefined && s.cores ? s.load / s.cores : undefined;
   return s.rx !== undefined ? mbps(Math.max(s.rx, s.tx ?? 0)) : undefined;
-}
-function show(metric: (typeof SAMPLED)[number], v: number) {
-  if (metric === "load") return `${v.toFixed(1)} x cores`;
-  if (metric === "network") return `${Math.round(v)} Mb/s`;
-  return `${Math.round(v)}%`;
 }
 
 const isSnoozed = (h: SavedHost) => (snoozed.get(hostKey(h)) ?? 0) > Date.now();
@@ -100,7 +95,7 @@ export function startAlerts() {
     const detail =
       metric === "unreachable"
         ? `No answer for ${r.for} min`
-        : `At or above ${threshold(metric, r)}${r.for ? ` for ${r.for} min` : ""}`;
+        : `At or above ${fmt(metric, r.above)}${r.for ? ` for ${r.for} min` : ""}`;
     logActivity(h, { kind: "monitoring", title, detail, ok: false });
     if (isSnoozed(h)) return;
     toast.add({ title, description: detail, color: "error", icon: "i-ph-warning-circle-duotone" });
@@ -119,7 +114,7 @@ export function startAlerts() {
     const v = valueOf(metric, s);
     if (v === undefined) return;
     const t = tracks.get(key) ?? { active: false, value: "" };
-    t.value = show(metric, v);
+    t.value = fmt(metric, metric === "load" ? v.toFixed(1) : Math.round(v));
     if (!t.active) {
       t.belowSince = undefined;
       if (v < r.above) t.since = undefined;

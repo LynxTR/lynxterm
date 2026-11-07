@@ -33,6 +33,9 @@ const tabDot = (t: Tab) =>
     : t.panes.some((p) => p.state === "connecting")
       ? "bg-primary"
       : "bg-[var(--ui-text-dimmed)]";
+// Terminals stay laid out under Home: focused one keeps taking keys.
+watch(current, (c) => c === null && (document.activeElement as HTMLElement | null)?.blur());
+
 function openHome(v?: View) {
   current.value = null;
   if (v) view.value = v;
@@ -84,6 +87,7 @@ const navItems = computed(() =>
     icon: i.icon,
     badge: "count" in i ? i.count : undefined,
     active: view.value === i.id,
+    class: view.value === i.id ? "nav-active" : undefined,
     onSelect: () => (view.value = i.id),
   })),
 );
@@ -166,6 +170,43 @@ watch(
   () => nextTick(measure),
 );
 
+const tabStrip = useTemplateRef<HTMLElement>("tabStrip");
+const { box: tabBar, measure: measureTabBar } = useIndicator(tabStrip, current, "[data-active]");
+const tabBarColor = computed(() => {
+  if (current.value === null) return "var(--ui-primary)";
+  const tab = tabs.value.find((t) => t.key === current.value);
+  return groupColor(tab?.panes[0]?.target.group) || "var(--ui-border-accented)";
+});
+function sizeTab(el: Element, open: boolean, done: () => void) {
+  const e = el as HTMLElement;
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return done();
+  const style = getComputedStyle(e);
+  const full = {
+    width: `${e.offsetWidth}px`,
+    paddingLeft: style.paddingLeft,
+    paddingRight: style.paddingRight,
+    opacity: 1,
+  };
+  const none = { width: "0px", paddingLeft: "0px", paddingRight: "0px", opacity: 0 };
+  e.style.overflow = "hidden";
+  const animation = e.animate(open ? [none, full] : [full, none], {
+    duration: open ? 200 : 150,
+    easing: open ? "cubic-bezier(0.2, 0.8, 0.2, 1)" : "ease-in",
+  });
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    e.style.overflow = "";
+    done();
+    measureTabBar();
+  };
+  animation.onfinish = finish;
+  setTimeout(finish, 400); // no paint, no finish event: closed tab must still go
+}
+const navBox = useTemplateRef<HTMLElement>("navBox");
+const { box: navMark } = useIndicator(navBox, view, ".nav-active");
+
 const goTab = (n: number) => {
   const t = tabs.value[n - 1];
   if (t) current.value = t.key;
@@ -205,223 +246,260 @@ const syncDot = computed(
 
 <template>
   <UApp>
-    <VaultScreen
-      v-if="status === 'none' || status === 'locked'"
-      :status="status"
-      @unlocked="status = 'unlocked'"
-    />
-    <SetupScreen v-else-if="status === 'unlocked' && firstRun" @done="openHome('hosts')" />
+    <Transition name="screen" mode="out-in" appear>
+      <VaultScreen
+        v-if="status === 'none' || status === 'locked'"
+        :status="status"
+        @unlocked="status = 'unlocked'"
+      />
+      <SetupScreen v-else-if="status === 'unlocked' && firstRun" @done="openHome('hosts')" />
 
-    <div
-      v-else-if="status === 'unlocked'"
-      class="flex h-screen flex-col overflow-hidden bg-default text-sm"
-    >
-      <header
-        data-tauri-drag-region
-        class="flex h-11 shrink-0 items-stretch border-b border-default bg-sunken"
-        :class="isMac && 'pl-[76px]'"
+      <div
+        v-else-if="status === 'unlocked'"
+        class="flex h-screen flex-col overflow-hidden bg-default text-sm"
       >
-        <button
-          class="relative flex shrink-0 items-center px-3.5 transition-colors hover:bg-elevated"
-          :title="syncHost ? `${syncDot.text}, ${syncHost}` : syncDot.text"
-          :aria-label="`${syncDot.text}. Open sync settings`"
-          @click="openSync"
+        <header
+          data-tauri-drag-region
+          class="flex h-11 shrink-0 items-stretch border-b border-default bg-sunken"
+          :class="isMac && 'pl-20'"
         >
-          <img src="/logo.svg" alt="" class="size-5" />
-          <span
-            v-if="syncDot.dot"
-            class="absolute right-2 bottom-2 size-[7px] rounded-full ring-2 ring-sunken"
-            :class="syncDot.dot"
-          />
-        </button>
-
-        <!-- empty strip drags window: Tauri drags only from elements marked themselves -->
-        <div data-tauri-drag-region class="flex min-w-0 flex-1 items-stretch gap-0.5 pt-1.5">
+          <!-- macOS: traffic lights left (centered on tabs, tauri.macos.conf.json), logo right -->
           <button
-            role="tab"
-            :aria-selected="current === null"
-            class="relative -mb-px flex shrink-0 items-center gap-2 rounded-t-md border border-b-0 px-4 text-[13px]"
-            :class="
-              current === null
-                ? 'border-default bg-default text-default before:absolute before:inset-x-2.5 before:-top-px before:h-0.5 before:rounded-full before:bg-primary'
-                : 'border-transparent text-muted hover:bg-muted hover:text-default'
-            "
-            @click="openHome()"
+            class="relative flex shrink-0 items-center px-3.5 pt-1.5 transition-colors hover:bg-elevated"
+            :class="isMac && 'order-last'"
+            :title="syncHost ? `${syncDot.text}, ${syncHost}` : syncDot.text"
+            :aria-label="`${syncDot.text}. Open sync settings`"
+            @click="openSync"
           >
-            <UIcon name="i-ph-house-duotone" class="size-4" />
-            Home
+            <img src="/logo.svg" alt="" class="size-5" />
+            <span
+              v-if="syncDot.dot"
+              class="absolute right-2 bottom-2 size-[7px] rounded-full ring-2 ring-sunken"
+              :class="syncDot.dot"
+            />
           </button>
-          <!-- Sideways scroll clips every edge: list reaches 1px past strip on each side so
-               tabs keep full border and, like Home, cover strip's bottom line. -->
+
+          <!-- Tauri drags only from marked elements -->
           <div
+            ref="tabStrip"
             data-tauri-drag-region
-            role="tablist"
-            aria-label="Sessions"
-            ref="tabScroller"
-            class="-my-px flex min-w-0 items-stretch gap-0.5 overflow-x-auto px-px pt-px [scrollbar-width:none]"
-            :class="!arrivedState.right && 'mask-r-from-[calc(100%-28px)]'"
+            class="relative flex min-w-0 flex-1 items-stretch gap-0.5 pt-1.5"
           >
-            <div
-              v-for="t in tabs"
-              :key="t.key"
-              class="group relative flex shrink-0 items-center gap-2 rounded-t-md border border-b-0 pr-2 pl-4 font-mono text-[13px]"
-              :class="
-                t.key === current
-                  ? 'border-default bg-default text-default before:absolute before:inset-x-2.5 before:-top-px before:h-0.5 before:rounded-full before:bg-(--grp)'
-                  : 'border-transparent text-muted hover:bg-muted hover:text-default'
-              "
+            <span
+              v-show="tabBar.shown"
+              aria-hidden="true"
+              class="pointer-events-none absolute z-10 h-0.5 rounded-full transition-[left,width,top,background-color] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
               :style="{
-                '--grp': groupColor(t.panes[0]!.target.group) || 'var(--ui-border-accented)',
+                left: `${tabBar.left + 10}px`,
+                width: `${Math.max(tabBar.width - 20, 0)}px`,
+                top: `${tabBar.top - 1}px`,
+                background: tabBarColor,
               }"
+            />
+            <button
+              role="tab"
+              :aria-selected="current === null"
+              :data-active="current === null || undefined"
+              class="tab -mb-px px-4"
+              @click="openHome()"
             >
-              <button
-                role="tab"
-                :aria-selected="t.key === current"
-                class="flex items-center gap-2"
-                @click="current = t.key"
-                @auxclick.middle="closeTab(t.key)"
+              <UIcon name="i-ph-house-duotone" class="size-4" />
+              Home
+            </button>
+            <!-- scroll clips edges: list 1px past strip, tabs keep border, cover bottom line -->
+            <div
+              data-tauri-drag-region
+              role="tablist"
+              aria-label="Sessions"
+              ref="tabScroller"
+              class="-my-px flex min-w-0 items-stretch gap-0.5 overflow-x-auto px-px pt-px [scrollbar-width:none]"
+              :class="!arrivedState.right && 'mask-r-from-[calc(100%-28px)]'"
+              @scroll="measureTabBar"
+            >
+              <TransitionGroup
+                :css="false"
+                @enter="(el, done) => sizeTab(el, true, done)"
+                @leave="(el, done) => sizeTab(el, false, done)"
               >
-                <span class="size-[7px] rounded-full" :class="tabDot(t)" />
-                {{ hostName(t.panes[0]!.target) }}
-                <UIcon
-                  v-if="t.panes.length > 1"
-                  name="i-ph-columns-duotone"
-                  class="size-3.5 text-dimmed"
-                />
-              </button>
+                <div
+                  v-for="t in tabs"
+                  :key="t.key"
+                  :data-active="t.key === current || undefined"
+                  class="tab group pr-2 pl-4 font-mono whitespace-nowrap"
+                >
+                  <button
+                    role="tab"
+                    :aria-selected="t.key === current"
+                    class="flex items-center gap-2"
+                    @click="current = t.key"
+                    @auxclick.middle="closeTab(t.key)"
+                  >
+                    <span class="size-[7px] rounded-full transition-colors" :class="tabDot(t)" />
+                    {{ hostName(t.panes[0]!.target) }}
+                    <UIcon
+                      v-if="t.panes.length > 1"
+                      name="i-ph-columns-duotone"
+                      class="size-3.5 text-dimmed"
+                    />
+                  </button>
+                  <UButton
+                    icon="i-ph-x"
+                    size="xs"
+                    color="neutral"
+                    variant="ghost"
+                    aria-label="Close tab"
+                    class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    :class="t.key === current && 'opacity-100'"
+                    @click="closeTab(t.key)"
+                  />
+                </div>
+              </TransitionGroup>
+            </div>
+            <UDropdownMenu v-if="tabs.length" :items="[tabItems]" :content="{ align: 'start' }">
               <UButton
-                icon="i-ph-x"
+                icon="i-ph-caret-down"
                 size="xs"
                 color="neutral"
                 variant="ghost"
-                aria-label="Close tab"
-                class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
-                :class="t.key === current && 'opacity-100'"
-                @click="closeTab(t.key)"
+                aria-label="All tabs"
+                title="All tabs"
+                class="self-center"
               />
-            </div>
+            </UDropdownMenu>
+            <UTooltip text="Quick connect" :kbds="['meta', 't']">
+              <UButton
+                icon="i-ph-plus"
+                size="xs"
+                color="neutral"
+                variant="ghost"
+                aria-label="Quick connect"
+                class="self-center"
+                @click="paletteOpen = true"
+              />
+            </UTooltip>
           </div>
-          <UDropdownMenu v-if="tabs.length" :items="[tabItems]" :content="{ align: 'start' }">
-            <UButton
-              icon="i-ph-caret-down"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              aria-label="All tabs"
-              title="All tabs"
-              class="self-center"
-            />
-          </UDropdownMenu>
-          <UTooltip text="Quick connect" :kbds="['meta', 't']">
-            <UButton
-              icon="i-ph-plus"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              aria-label="Quick connect"
-              class="self-center"
-              @click="paletteOpen = true"
-            />
-          </UTooltip>
-        </div>
 
-        <div data-tauri-drag-region class="ml-auto flex shrink-0 items-stretch">
-          <WindowControls />
-        </div>
-      </header>
+          <div data-tauri-drag-region class="ml-auto flex shrink-0 items-stretch">
+            <WindowControls />
+          </div>
+        </header>
 
-      <UDashboardGroup v-show="current === null" storage="local" storage-key="lynxterm" unit="px">
-        <UDashboardSidebar
-          id="home"
-          collapsible
-          resizable
-          :min-size="200"
-          :default-size="240"
-          :max-size="300"
-          :collapsed-size="64"
-          :ui="{
-            root: 'flex min-h-0 bg-sunken',
-            header: 'h-auto px-3 pt-3 pb-2',
-            body: 'gap-1 px-3 py-0',
-            footer: 'px-3 py-3',
-          }"
-        >
-          <template #header="{ collapsed }">
-            <UDashboardSearchButton
-              :collapsed="collapsed"
-              label="Find or ssh…"
-              class="h-10 w-full bg-muted text-muted ring-accented"
-            />
-          </template>
-          <template #default="{ collapsed }">
-            <UNavigationMenu
-              :items="navItems"
-              :collapsed="collapsed"
-              orientation="vertical"
-              color="neutral"
-              tooltip
+        <!-- hidden one stays laid out: no refit on return -->
+        <div class="grid min-h-0 flex-1">
+          <UDashboardGroup
+            storage="local"
+            storage-key="lynxterm"
+            unit="px"
+            class="lt-swap outer"
+            :class="current !== null && 'off'"
+          >
+            <UDashboardSidebar
+              id="home"
+              collapsible
+              resizable
+              :min-size="200"
+              :default-size="240"
+              :max-size="300"
+              :collapsed-size="64"
               :ui="{
-                list: 'flex flex-col gap-1',
-                link: 'h-10 gap-3 px-3 font-normal text-toned data-active:text-highlighted data-active:before:bg-accented',
-                linkLeadingIcon: 'size-[18px]',
-                linkTrailingBadge:
-                  'bg-transparent px-0 text-[11px] font-normal text-muted tabular-nums ring-0',
+                // drag-resize follows mouse, no transition
+                root: 'flex min-h-0 border-e border-default bg-default transition-[width] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] data-[dragging=true]:transition-none',
+                header: 'h-auto px-3 pt-3 pb-2',
+                body: 'gap-1 px-3 py-0',
+                footer: 'px-3 py-3',
               }"
-            />
-          </template>
-          <template #footer="{ collapsed }">
-            <div class="flex w-full min-w-0 flex-col gap-2" :class="collapsed && 'items-center'">
-              <UTooltip v-if="newDevices" text="New devices allowed" :disabled="!collapsed">
-                <UButton
-                  icon="i-ph-shield-warning-duotone"
-                  :label="collapsed ? undefined : 'New devices allowed'"
-                  color="warning"
-                  variant="soft"
-                  :square="collapsed"
-                  class="h-9 font-normal"
-                  :class="!collapsed && 'w-full'"
-                  @click="newDevicesOpen = true"
+            >
+              <template #header="{ collapsed }">
+                <UDashboardSearchButton
+                  :collapsed="collapsed"
+                  label="Find or ssh…"
+                  class="h-10 w-full bg-muted text-muted ring-accented"
                 />
-              </UTooltip>
-              <!-- shortcut in tooltip: keys beside label would not fit next to collapse button -->
-              <div class="flex w-full min-w-0 gap-1" :class="collapsed && 'flex-col items-center'">
-                <UTooltip text="Lock vault" :kbds="['meta', 'shift', 'l']">
-                  <UButton
-                    icon="i-ph-lock-duotone"
-                    :label="collapsed ? undefined : 'Lock vault'"
-                    color="neutral"
-                    variant="ghost"
-                    :square="collapsed"
-                    class="h-10 min-w-0 flex-1 font-normal text-muted"
-                    aria-label="Lock vault"
-                    aria-keyshortcuts="Control+Shift+L Meta+Shift+L"
-                    @click="lock"
+              </template>
+              <template #default="{ collapsed }">
+                <div ref="navBox" class="relative">
+                  <span
+                    v-show="navMark.shown"
+                    aria-hidden="true"
+                    class="pointer-events-none absolute inset-x-0 rounded-md bg-accented transition-[top,height] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+                    :style="{ top: `${navMark.top}px`, height: `${navMark.height}px` }"
                   />
-                </UTooltip>
-                <UDashboardSidebarCollapse class="h-10 shrink-0 text-muted" />
-              </div>
-            </div>
-          </template>
-        </UDashboardSidebar>
+                  <UNavigationMenu
+                    :items="navItems"
+                    :collapsed="collapsed"
+                    orientation="vertical"
+                    color="neutral"
+                    tooltip
+                    :ui="{
+                      list: 'flex flex-col gap-1',
+                      link: 'h-10 gap-3 px-3 font-normal text-toned transition-colors data-active:text-highlighted',
+                      linkLeadingIcon: 'size-[18px]',
+                      linkTrailingBadge:
+                        'bg-transparent px-0 text-[11px] font-normal text-muted tabular-nums ring-0',
+                    }"
+                  />
+                </div>
+              </template>
+              <template #footer="{ collapsed }">
+                <div
+                  class="flex w-full min-w-0 flex-col gap-2"
+                  :class="collapsed && 'items-center'"
+                >
+                  <UTooltip v-if="newDevices" text="New devices allowed" :disabled="!collapsed">
+                    <UButton
+                      icon="i-ph-shield-warning-duotone"
+                      :label="collapsed ? undefined : 'New devices allowed'"
+                      color="warning"
+                      variant="soft"
+                      :square="collapsed"
+                      class="h-9 font-normal"
+                      :class="!collapsed && 'w-full'"
+                      @click="newDevicesOpen = true"
+                    />
+                  </UTooltip>
+                  <div
+                    class="flex w-full min-w-0 gap-1"
+                    :class="collapsed && 'flex-col items-center'"
+                  >
+                    <UTooltip text="Lock vault" :kbds="['meta', 'shift', 'l']">
+                      <UButton
+                        icon="i-ph-lock-duotone"
+                        :label="collapsed ? undefined : 'Lock vault'"
+                        color="neutral"
+                        variant="ghost"
+                        :square="collapsed"
+                        class="h-10 min-w-0 flex-1 font-normal text-muted"
+                        aria-label="Lock vault"
+                        aria-keyshortcuts="Control+Shift+L Meta+Shift+L"
+                        @click="lock"
+                      />
+                    </UTooltip>
+                    <UDashboardSidebarCollapse class="h-10 shrink-0 text-muted" />
+                  </div>
+                </div>
+              </template>
+            </UDashboardSidebar>
 
-        <HostsView v-show="view === 'hosts'" class="min-w-0 flex-1" />
-        <KeychainView v-show="view === 'keychain'" class="min-w-0 flex-1" />
-        <SnippetsView v-show="view === 'snippets'" class="min-w-0 flex-1" />
-        <ForwardsView v-show="view === 'forwards'" class="min-w-0 flex-1" />
-        <KnownHostsView v-show="view === 'known'" class="min-w-0 flex-1" />
-        <SettingsView v-show="view === 'settings'" class="min-w-0 flex-1" />
+            <HostsView v-show="view === 'hosts'" class="min-w-0 flex-1 animate-fade" />
+            <KeychainView v-show="view === 'keychain'" class="min-w-0 flex-1 animate-fade" />
+            <SnippetsView v-show="view === 'snippets'" class="min-w-0 flex-1 animate-fade" />
+            <ForwardsView v-show="view === 'forwards'" class="min-w-0 flex-1 animate-fade" />
+            <KnownHostsView v-show="view === 'known'" class="min-w-0 flex-1 animate-fade" />
+            <SettingsView v-show="view === 'settings'" class="min-w-0 flex-1 animate-fade" />
 
-        <UDashboardSearch
-          v-model:open="paletteOpen"
-          v-model:search-term="term"
-          shortcut="meta_shift_k"
-          :groups="paletteGroups"
-          :color-mode="false"
-          placeholder="Find a host or ssh user@hostname…"
-        />
-        <NewDevicesDialog />
-      </UDashboardGroup>
-      <SessionsView v-show="current !== null" class="min-h-0 flex-1" />
-    </div>
+            <UDashboardSearch
+              v-model:open="paletteOpen"
+              v-model:search-term="term"
+              shortcut="meta_shift_k"
+              :groups="paletteGroups"
+              :color-mode="false"
+              placeholder="Find a host or ssh user@hostname…"
+            />
+            <NewDevicesDialog />
+          </UDashboardGroup>
+          <SessionsView class="lt-swap inner" :class="current === null && 'off'" />
+        </div>
+      </div>
+    </Transition>
   </UApp>
 </template>

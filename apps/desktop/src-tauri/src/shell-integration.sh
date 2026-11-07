@@ -1,21 +1,14 @@
 # >>> lynxterm shell integration >>>
 # Prompt start/end (OSC 133), working directory (OSC 7): Lynxterm reads exact command
-# line, suggests completions. Exit status, git branch (OSC 633) feed command blocks;
-# block header lines print only in sessions Lynxterm set up itself.
+# line, suggests completions. Exit status, git branch (OSC 633) feed command cards.
 # To remove: delete everything between these two marker lines.
 case $- in *i*)
   # Keeps $? so prompt themes see real status.
   __lynxterm_keep() { __lynxterm_status=$?; return $__lynxterm_status; }
-  # Exit status (if command ran), directory, then next block's header line, which
-  # Lynxterm draws over. After command, empty row first: gap between blocks.
   __lynxterm_report() {
     printf '\033]133;D%s\007\033]7;file://%s%s\007' "${__lynxterm_ran:+;$__lynxterm_status}" "$1" "$PWD"
     printf '\033]633;P;Branch=%s\007' "$(git symbolic-ref --short -q HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)"
-    if [ -n "$__lynxterm_blocks" ] && [ -n "$__lynxterm_ran$__lynxterm_first" ]; then
-      [ -n "$__lynxterm_ran" ] && printf '\n'
-      printf '\033]633;H\007\n'
-    fi
-    __lynxterm_ran= __lynxterm_first=
+    __lynxterm_ran=
   }
   if [ -n "$BASH_VERSION" ]; then
     __lynxterm_prompt() {

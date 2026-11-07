@@ -22,7 +22,7 @@ export default defineAppConfig({
       panelOpen: "i-ph-sidebar-simple-duotone",
       search: "i-ph-magnifying-glass-duotone",
     },
-    modal: { slots: { content: "bg-muted" } },
+    modal: { slots: { content: "bg-muted", footer: "justify-end gap-2" } },
     // Step bigger than Nuxt UI defaults: 28, 32, 36, 40px tall, xs to lg. Icons 18px from md.
     button: {
       variants: {

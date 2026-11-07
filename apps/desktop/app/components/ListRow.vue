@@ -26,9 +26,7 @@ defineEmits<{ select: [] }>();
         <span class="block truncate font-medium" :class="mono && 'font-mono text-xs'">{{
           title
         }}</span>
-        <span v-if="subtitle" class="block truncate font-mono text-[11px] text-muted">{{
-          subtitle
-        }}</span>
+        <span v-if="subtitle" class="block truncate t-sub">{{ subtitle }}</span>
       </span>
       <!-- pills truncate before title -->
       <span

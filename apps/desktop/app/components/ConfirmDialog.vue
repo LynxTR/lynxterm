@@ -22,7 +22,7 @@ const emit = defineEmits<{ close: [ok: boolean] }>();
       </p>
     </template>
     <template #footer>
-      <form class="flex w-full justify-end gap-2" @submit.prevent="emit('close', true)">
+      <form class="contents" @submit.prevent="emit('close', true)">
         <UButton label="Cancel" color="neutral" variant="ghost" @click="emit('close', false)">
           <template #trailing><UKbd value="Esc" /></template>
         </UButton>

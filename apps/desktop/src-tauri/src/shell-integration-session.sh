@@ -1,7 +1,5 @@
 # Typed into each new session right after shell-integration.sh (see SshTerminal.vue):
-# enables block headers, removes typed line from bash history, reports prompt height in
-# lines so Lynxterm can replace it.
-__lynxterm_blocks=1 __lynxterm_first=1
+# drops typed line from bash history, reports prompt height so Lynxterm can replace it.
 if [ -n "$BASH_VERSION" ]; then
   # Typed line is script in base64; this is its start, "# >>> ".
   case "$(history 1)" in *IyA+Pj4g*) history -d "$(history 1 | awk '{print $1}')" ;; esac
