@@ -5,14 +5,28 @@
 
 An open-source SSH client with an encrypted vault that syncs through a Cloudflare Worker on your own account.
 
+![Hosts with live monitoring](docs/screenshots/hosts.webp)
+
 ## Features
 
 - SSH terminal with tabs and split panes, SFTP, snippets and port forwarding
+- Each command in its own block with exit code, time and git branch, through optional shell integration
 - Live server monitoring (CPU, memory, disk, load, network) with alert rules
 - Hosts, groups, keys, known hosts and command history, all in one encrypted vault
 - Imports hosts from `~/.ssh/config`, generates keys and installs them on your servers
 - Sync between your devices through your own Worker, on Cloudflare's free plan
 - macOS, Windows and Linux
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/terminal.webp" alt="Terminal with command blocks and the monitor panel"></td>
+    <td><img src="docs/screenshots/keychain.webp" alt="Keychain"></td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/forwards.webp" alt="Port forwarding"></td>
+    <td><img src="docs/screenshots/sync.webp" alt="Sync settings"></td>
+  </tr>
+</table>
 
 ## Download
 
@@ -67,6 +81,7 @@ To run the Worker locally, copy `apps/vault-worker/.dev.vars.example` to `.dev.v
 - `apps/desktop`: the app, a Nuxt UI frontend with a Rust backend in `src-tauri`
 - `apps/vault-worker`: the sync Worker (Cloudflare Workers and D1)
 - `brand`: logos
+- `docs/screenshots`: the pictures in this README, taken from the sample data in `pnpm -C apps/desktop dev`
 
 ## License
 
