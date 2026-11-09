@@ -57,6 +57,12 @@ function toggleSplit() {
 }
 
 const connect = (h: SavedHost) => start({ ...h, password: "" });
+/** New tab running `command` instead of a shell, titled `what` after host; its pane, to
+ *  follow. */
+function runOn(h: SavedHost, command: string, what: string) {
+  start({ ...h, name: `${hostName(h)}: ${what}`, password: "", command });
+  return tabs.value.at(-1)!.panes[0]!;
+}
 
 // Tool panel beside terminals (SessionsView), one at a time.
 type Panel = "sftp" | "monitor" | "snippets" | "forwards";
@@ -81,6 +87,7 @@ function closeAll() {
 
 export const useSessions = () => ({
   tabs,
+  runOn,
   current,
   focusedPane,
   activePane,

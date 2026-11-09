@@ -33,13 +33,21 @@ export default defineNuxtPlugin(() => {
   const vault = params.get("vault");
   const firstRun = vault === "none";
   let signedOut = params.has("signedOut");
+  // ?view=services opens that page, ?noUpdate skips the release toast: README screenshots.
+  const wanted = params.get("view");
+  if (wanted) useView().value = wanted as View;
   type Item = Record<string, unknown>;
   const upsert = (listKey: string, item: Item, idPrefix: string) => {
     const list = data[listKey] as Item[];
-    const saved = { ...item, id: item.id || `${idPrefix}${Date.now()}${Math.random()}` };
+    // JSON copy, like real IPC: nested Vue proxies can't be cloned later.
+    const saved = {
+      ...(JSON.parse(JSON.stringify(item)) as Item),
+      id: item.id || `${idPrefix}${Date.now()}${Math.random()}`,
+    };
     const i = list.findIndex((x) => item.id && x.id === item.id);
     if (i >= 0) list[i] = saved;
     else list.push(saved);
+    return saved.id;
   };
   const data: Record<string, unknown> = {
     vault_status: vault === "none" || vault === "locked" ? vault : "unlocked",
@@ -78,7 +86,7 @@ export default defineNuxtPlugin(() => {
           ]),
           host("h2", "api-prod-2", "production", "deploy", "10.0.4.13", "ubuntu", ["nginx"]),
           host("h3", "db-primary", "production", "postgres", "10.0.5.2", "debian", ["postgres"]),
-          host("h4", "nas.local", "homelab", "admin", "192.168.1.20"),
+          host("h4", "nas.local", "homelab", "admin", "192.168.1.20", "alpine"),
           host("h5", "proxmox", "homelab", "root", "192.168.1.10", "debian"),
         ],
     groups_list: firstRun
@@ -91,6 +99,57 @@ export default defineNuxtPlugin(() => {
       { id: "s1", name: "Tail app logs", command: "docker compose logs -f --tail 100" },
       { id: "s2", name: "Disk usage", command: "df -h" },
     ],
+    services_list: [
+      {
+        id: "sv1",
+        name: "Docker",
+        description: "Docker Engine from Docker's apt repo",
+        checkOnConnect: true,
+        checkEvery: 15,
+        shared: 'PKGS="docker-ce docker-ce-cli containerd.io"',
+        functions: {
+          detect: "command -v docker >/dev/null || return 1\ndocker --version",
+          install:
+            "preflight; [ $? -lt 2 ] || return 2\ncurl -fsSL https://get.docker.com | sudo sh",
+          check:
+            'systemctl is-active -q docker || { echo "daemon down"; return 2; }\necho "$(docker ps -q | wc -l) containers running"',
+          logs: 'if [ -n "$1" ]; then docker logs --tail 200 -f "$1"\nelse journalctl -u docker -n 200 -f; fi',
+          uninstall: 'sudo apt-get remove -y $PKGS\necho "Data kept in /var/lib/docker"',
+        },
+        why: "",
+        fixLabel: "",
+      },
+    ],
+    service_save: ({ service }: { service: Item }) => upsert("services_list", service, "sv"),
+    // No sh in a browser: always valid. ?shError shows the error look.
+    service_check: ({ script }: { script: string }) =>
+      params.has("shError")
+        ? `sh: ${script.split("\n").length}: Syntax error: end of file unexpected (expecting "fi")`
+        : null,
+    // Docker fine with an update, Swap not installed, anything else installed with a warning.
+    service_run: async ({ serviceId, function: fn }: { serviceId: string; function: string }) => {
+      await new Promise((r) => setTimeout(r, 400));
+      const name = (data.services_list as Item[]).find((s) => s.id === serviceId)?.name;
+      if (fn === "preflight") return { code: 1, output: "Will ask for sudo password\n" };
+      // Built-ins: Node and Go on every sample host, the rest not installed.
+      const builtin = serviceId.startsWith("builtin:") ? serviceId.slice(8) : "";
+      if (fn === "detect" && builtin)
+        return builtin === "node"
+          ? { code: 0, output: "Node.js v22.17.0\nupdate: v26.13.0\n" }
+          : builtin === "go"
+            ? { code: 0, output: "Go 1.27.3\n" }
+            : { code: 1, output: "" };
+      if (fn === "detect")
+        return serviceId === "sv1"
+          ? { code: 0, output: "Docker version 27.3.1\nupdate: 5:27.4.0-1~ubuntu.24.04\n" }
+          : name === "Swap"
+            ? { code: 1, output: "" }
+            : { code: 0, output: "1.0.2\n" };
+      return serviceId === "sv1"
+        ? { code: 0, output: "4 containers running\n" }
+        : { code: 1, output: "Running with default limits, not strict\n" };
+    },
+    service_command: ({ function: fn }: { function: string }) => `sh -c 'mock ${fn}'`,
     forwards_list: [
       {
         id: "f1",
@@ -132,15 +191,17 @@ export default defineNuxtPlugin(() => {
     "plugin:app|version": "0.1.0",
     latest_release: {
       system: "Linux, x86_64",
-      latest: {
-        version: "0.2.0",
-        url: "https://github.com/LynxTR/lynxterm/releases/tag/v0.2.0",
-        download: {
-          name: "Lynxterm_0.2.0_amd64.deb",
-          url: "https://github.com/LynxTR/lynxterm/releases/download/v0.2.0/Lynxterm_0.2.0_amd64.deb",
-          kind: ".deb package",
-        },
-      },
+      latest: params.has("noUpdate")
+        ? null
+        : {
+            version: "0.2.0",
+            url: "https://github.com/LynxTR/lynxterm/releases/tag/v0.2.0",
+            download: {
+              name: "Lynxterm_0.2.0_amd64.deb",
+              url: "https://github.com/LynxTR/lynxterm/releases/download/v0.2.0/Lynxterm_0.2.0_amd64.deb",
+              kind: ".deb package",
+            },
+          },
     },
     sync_pending: [],
     sync_status: {
@@ -160,9 +221,17 @@ export default defineNuxtPlugin(() => {
     // Shell that echoes and answers setup line like real hooks (shell-integration.sh), to try
     // typing, suggestions, command blocks. "false" fails, "sleep" is slow. Starship-style
     // prompt checks Nerd Font icons.
-    ssh_open: ({ onData }: { onData: Channel<ArrayBuffer> }) => {
+    ssh_open: ({ onData, command }: { onData: Channel<ArrayBuffer>; command?: string }) => {
       const echo = (text: string) =>
         onData.onmessage(new TextEncoder().encode(text).buffer as ArrayBuffer);
+      // Service action: prints, then ends (empty frame), like a real command.
+      if (command) {
+        const fn = command.split(" ").at(-1)!.replace("'", "");
+        setTimeout(() => echo(`Running ${fn}...\r\n`), 100);
+        setTimeout(() => echo(`${fn}: done\r\n`), 1200);
+        setTimeout(() => onData.onmessage(new ArrayBuffer(0)), 1500);
+        return shells.length + 1;
+      }
       const osc = (s: string) => `\x1b]${s}\x07`;
       const prompt =
         "\x1b[30;44m \uf07c ~/app \x1b[34;43m\ue0b0\x1b[30m \ue725 main \x1b[0;33m\ue0b0" +

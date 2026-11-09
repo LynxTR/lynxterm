@@ -89,6 +89,90 @@ const custom = computed(
   () => Object.keys(settings.monitoring.overrides[props.host.id!] ?? {}).length > 0,
 );
 
+const { available } = useServices();
+const { results, busy: checking } = useServiceHealth(() => props.host.id);
+const checkNow = () => checkHost(props.host);
+/** Rows: own services always, built-ins once seen installed. The rest wait under Install. */
+const installed = (s: Service) => {
+  const r = results.value[s.id!];
+  return !!r && r.health !== "missing" && r.health !== "unknown";
+};
+const services = computed(() => available.value.filter((s) => !isBuiltIn(s) || installed(s)));
+// Checked ones only: nothing is offered that detect is about to find installed.
+const installMenu = computed(() => [
+  available.value
+    .filter(
+      (s) =>
+        isBuiltIn(s) && results.value[s.id!] && !installed(s) && s.functions.install !== undefined,
+    )
+    .map((s) => ({
+      label: s.name,
+      description: s.description,
+      icon: "i-ph-download-simple-duotone",
+      onSelect: () => runAction(props.host, s, "install"),
+    })),
+]);
+// Detect on open: whatever was never checked here, so buttons show without Check now. Keyed
+// on ids: a saved copy replacing a built-in of the same name is a new id, same length.
+watch(
+  () => [props.host.id, available.value.map((s) => s.id).join()],
+  () => {
+    const unchecked = (s: Service) => !results.value[s.id!];
+    if (available.value.some(unchecked)) void checkHost(props.host, unchecked);
+  },
+  { immediate: true },
+);
+/** Row buttons, from its last check and the functions the service has. Each runs in a new
+ *  terminal tab. */
+function actionsFor(s: Service) {
+  const r = results.value[s.id!];
+  const has = (f: ServiceFunction) => s.functions[f] !== undefined;
+  const act = (fn: ServiceFunction, label: string) => ({
+    label,
+    run: () => runAction(props.host, s, fn),
+  });
+  if (!r || r.health === "unknown") return [];
+  if (r.health === "missing") return has("install") ? [act("install", "Install")] : [];
+  return [
+    ...((r.health === "warn" || r.health === "crit") && has("fix")
+      ? [act("fix", s.fixLabel || "Fix")]
+      : []),
+    ...(r.update && has("upgrade") ? [act("upgrade", "Upgrade")] : []),
+    ...(has("logs") ? [act("logs", "Logs")] : []),
+  ];
+}
+/** Upgrade here too when no update was detected (a runtime's installer always fetches the
+ *  newest), and Uninstall. */
+const moreFor = (s: Service) => {
+  const r = results.value[s.id!];
+  if (!r || r.health === "missing" || r.health === "unknown") return [];
+  const items = [];
+  if (s.functions.upgrade !== undefined && !r.update)
+    items.push({
+      label: "Upgrade",
+      icon: "i-ph-arrow-circle-up-duotone",
+      onSelect: () => runAction(props.host, s, "upgrade"),
+    });
+  if (s.functions.uninstall !== undefined)
+    items.push({
+      label: "Uninstall",
+      icon: "i-ph-trash-duotone",
+      color: "error" as const,
+      onSelect: () => runAction(props.host, s, "uninstall"),
+    });
+  return items.length ? [items] : [];
+};
+const view = useView();
+const checkedAt = computed(() => Math.max(0, ...Object.values(results.value).map((r) => r.at)));
+const HEALTH_LOOK: Record<Health | "none", { icon: string; tone: string }> = {
+  ok: { icon: "i-ph-check-circle-duotone", tone: "text-success" },
+  warn: { icon: "i-ph-warning-circle-duotone", tone: "text-warning" },
+  crit: { icon: "i-ph-x-circle-duotone", tone: "text-error" },
+  unknown: { icon: "i-ph-question-duotone", tone: "text-muted" },
+  missing: { icon: "i-ph-minus-circle-duotone", tone: "text-dimmed" },
+  none: { icon: "i-ph-circle-dashed", tone: "text-dimmed" },
+};
+
 const activity = ref<Activity[]>([]);
 async function loadActivity() {
   try {
@@ -271,6 +355,97 @@ function when(at: number) {
         </span>
       </section>
     </div>
+
+    <section class="flex flex-col gap-3 card px-4 py-3.5" aria-label="Services">
+      <div class="flex items-center gap-2">
+        <span class="t-label">Services</span>
+        <span v-if="checkedAt" class="text-xs text-muted"
+          >checked {{ when(checkedAt / 1000) }}</span
+        >
+        <UButton
+          label="Check now"
+          icon="i-ph-arrows-clockwise"
+          size="xs"
+          color="neutral"
+          variant="ghost"
+          class="ml-auto"
+          :loading="checking"
+          @click="checkNow"
+        />
+        <UDropdownMenu
+          v-if="installMenu[0]!.length"
+          :items="installMenu"
+          :content="{ align: 'end' }"
+        >
+          <UButton
+            label="Install"
+            icon="i-ph-plus"
+            trailing-icon="i-ph-caret-down"
+            size="xs"
+            color="neutral"
+            variant="outline"
+          />
+        </UDropdownMenu>
+      </div>
+      <ul v-if="services.length" class="flex flex-col gap-2 text-sm">
+        <li
+          v-for="s in services"
+          :key="s.id"
+          class="flex items-center gap-3"
+          :class="results[s.id!]?.health === 'missing' && 'text-dimmed'"
+        >
+          <UIcon
+            :name="HEALTH_LOOK[results[s.id!]?.health ?? 'none'].icon"
+            class="size-4 shrink-0"
+            :class="HEALTH_LOOK[results[s.id!]?.health ?? 'none'].tone"
+          />
+          <span class="w-36 shrink-0 truncate font-medium">{{ s.name }}</span>
+          <span class="min-w-0 flex-1 truncate" :title="results[s.id!]?.summary">{{
+            results[s.id!]?.summary ?? "Not checked yet"
+          }}</span>
+          <UBadge
+            v-if="results[s.id!]?.update"
+            :label="`update ${results[s.id!]!.update}`"
+            size="sm"
+            class="max-w-40 truncate font-mono"
+          />
+          <span
+            v-else-if="results[s.id!]?.version"
+            class="max-w-48 truncate t-sub"
+            :title="results[s.id!]!.version"
+            >{{ results[s.id!]!.version }}</span
+          >
+          <UButton
+            v-for="a in actionsFor(s)"
+            :key="a.label"
+            :label="a.label"
+            size="xs"
+            color="neutral"
+            variant="outline"
+            @click="a.run"
+          />
+          <UDropdownMenu v-if="moreFor(s).length" :items="moreFor(s)" :content="{ align: 'end' }">
+            <UButton
+              icon="i-ph-dots-three"
+              size="xs"
+              square
+              color="neutral"
+              variant="ghost"
+              :aria-label="`More for ${s.name}`"
+            />
+          </UDropdownMenu>
+        </li>
+      </ul>
+      <span class="text-xs text-muted">
+        <template v-if="services.length">
+          Services with Check on connect run when a terminal connects here.
+        </template>
+        <template v-else>
+          Nothing installed here yet. Install lists what LynxTerm can set up; your own go in
+          <ULink class="text-primary" @click="view = 'services'">Services</ULink>.
+        </template>
+      </span>
+    </section>
 
     <section class="flex flex-col gap-3 card px-4 py-3.5" aria-label="Activity">
       <span class="t-label">Activity</span>

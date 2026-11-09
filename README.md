@@ -14,6 +14,7 @@ An open-source SSH client with an encrypted vault that syncs through a Cloudflar
 - Live server monitoring (CPU, memory, disk, load, network) with alert rules
 - Hosts, groups, keys, known hosts and command history, all in one encrypted vault
 - Imports hosts from `~/.ssh/config`, generates keys and installs them on your servers
+- Services: see what's installed on each server, install Node, Bun, Deno, Rust, Go or PHP with one click, or write your own install and health-check scripts
 - Sync between your devices through your own Worker, on Cloudflare's free plan
 - macOS, Windows and Linux
 
@@ -27,6 +28,16 @@ An open-source SSH client with an encrypted vault that syncs through a Cloudflar
     <td><img src="docs/screenshots/sync.webp" alt="Sync settings"></td>
   </tr>
 </table>
+
+## Services
+
+A service is a small `sh` file with named functions: `detect`, `install`, `check`, `logs`, `fix`, `upgrade`, `uninstall`. Lynxterm runs them over your SSH login, so nothing stays running on the server. `detect` and `check` run in the background when you open a host; anything that needs `sudo` or shows output runs in its own terminal tab.
+
+![Services editor](docs/screenshots/services.webp)
+
+- Six built-ins ship with the app and install into the user's home with no sudo: Node.js LTS, Bun, Deno, Rust and Go use the official installers; PHP uses `apt` or `dnf`.
+- Your own services live in the vault and sync. The editor locks the function lines, checks syntax with your local `sh`, and warns about bash-only syntax that breaks on Debian's `dash`.
+- A failing `check` can offer a fix button, run on connect, or run on a schedule while the app is open. Exit codes say what happened: 0 ok, 1 warning, 2 critical.
 
 ## Download
 

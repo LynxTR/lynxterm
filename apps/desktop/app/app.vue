@@ -11,6 +11,7 @@ onMounted(
 const { hosts } = useHosts();
 const { keys } = useKeys();
 const { snippets } = useSnippets();
+const { services } = useServices();
 const { forwards } = useForwards();
 const { knownHosts, refresh: refreshKnownHosts } = useKnownHosts();
 const sync = useSync();
@@ -18,6 +19,7 @@ const { state: syncState, host: syncHost, ago, newDevices, newDevicesOpen } = sy
 
 // Alerts watch every host's live readings; nothing streams until vault opens.
 startAlerts();
+startServiceChecks();
 startUpdateChecks();
 
 watch(status, async (s) => {
@@ -48,10 +50,6 @@ async function lock() {
 }
 
 const view = useView();
-function openSync() {
-  openSettings("sync");
-  openHome();
-}
 const nav = computed(
   () =>
     [
@@ -62,6 +60,12 @@ const nav = computed(
         label: "Snippets",
         icon: "i-ph-code-duotone",
         count: snippets.value.length,
+      },
+      {
+        id: "services",
+        label: "Services",
+        icon: "i-ph-cube-duotone",
+        count: services.value.length,
       },
       {
         id: "forwards",
@@ -207,10 +211,6 @@ function sizeTab(el: Element, open: boolean, done: () => void) {
 const navBox = useTemplateRef<HTMLElement>("navBox");
 const { box: navMark } = useIndicator(navBox, view, ".nav-active");
 
-const goTab = (n: number) => {
-  const t = tabs.value[n - 1];
-  if (t) current.value = t.key;
-};
 defineShortcuts({
   meta_k: {
     usingInput: true,
@@ -221,7 +221,10 @@ defineShortcuts({
   ...Object.fromEntries(
     [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => [
       `meta_${n}`,
-      { usingInput: true, handler: () => goTab(n) },
+      {
+        usingInput: true,
+        handler: () => (current.value = tabs.value[n - 1]?.key ?? current.value),
+      },
     ]),
   ),
   meta_w: { usingInput: true, handler: () => current.value !== null && closeTab(current.value) },
@@ -269,7 +272,10 @@ const syncDot = computed(
             :class="isMac && 'order-last'"
             :title="syncHost ? `${syncDot.text}, ${syncHost}` : syncDot.text"
             :aria-label="`${syncDot.text}. Open sync settings`"
-            @click="openSync"
+            @click="
+              openSettings('sync');
+              current = null;
+            "
           >
             <img src="/logo.svg" alt="" class="size-5" />
             <span
@@ -483,6 +489,7 @@ const syncDot = computed(
             <HostsView v-show="view === 'hosts'" class="min-w-0 flex-1 animate-fade" />
             <KeychainView v-show="view === 'keychain'" class="min-w-0 flex-1 animate-fade" />
             <SnippetsView v-show="view === 'snippets'" class="min-w-0 flex-1 animate-fade" />
+            <ServicesView v-show="view === 'services'" class="min-w-0 flex-1 animate-fade" />
             <ForwardsView v-show="view === 'forwards'" class="min-w-0 flex-1 animate-fade" />
             <KnownHostsView v-show="view === 'known'" class="min-w-0 flex-1 animate-fade" />
             <SettingsView v-show="view === 'settings'" class="min-w-0 flex-1 animate-fade" />

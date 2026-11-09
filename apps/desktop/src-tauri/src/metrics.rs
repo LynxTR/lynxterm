@@ -78,6 +78,27 @@ pub async fn metrics(
 #[derive(Default)]
 pub struct Watched(Mutex<HashMap<String, Arc<Handle>>>);
 
+impl Watched {
+    /// Saved host's background connection, opened once and kept for next call.
+    pub async fn handle(&self, vault: &Vault, host_id: &str) -> Result<Arc<Handle>, String> {
+        let open = self.0.lock().unwrap().get(host_id).cloned();
+        if let Some(handle) = open.filter(|h| !h.is_closed()) {
+            return Ok(handle);
+        }
+        let handle = Arc::new(ssh::connect_saved(vault, host_id, "").await?.1);
+        self.0
+            .lock()
+            .unwrap()
+            .insert(host_id.into(), handle.clone());
+        Ok(handle)
+    }
+
+    /// After a failed call: next one connects again.
+    pub fn forget(&self, host_id: &str) {
+        self.0.lock().unwrap().remove(host_id);
+    }
+}
+
 /// Saved host over background connection, kept for next call. Key-based hosts only:
 /// passwords never stored.
 #[tauri::command]
@@ -88,22 +109,10 @@ pub async fn metrics_host(
     action: String,
 ) -> Result<String, String> {
     let script = script(&action)?;
-    let open = watched.0.lock().unwrap().get(&host_id).cloned();
-    let handle = match open.filter(|h| !h.is_closed()) {
-        Some(handle) => handle,
-        None => {
-            let handle = Arc::new(ssh::connect_saved(&vault, &host_id, "").await?.1);
-            watched
-                .0
-                .lock()
-                .unwrap()
-                .insert(host_id.clone(), handle.clone());
-            handle
-        }
-    };
-    ssh::exec(&handle, &script).await.inspect_err(|_| {
-        watched.0.lock().unwrap().remove(&host_id);
-    })
+    let handle = watched.handle(&vault, &host_id).await?;
+    ssh::exec(&handle, &script)
+        .await
+        .inspect_err(|_| watched.forget(&host_id))
 }
 
 #[tauri::command]

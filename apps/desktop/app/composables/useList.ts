@@ -10,7 +10,8 @@ export function useFilter<T>(list: () => T[], text: (item: T) => string) {
 }
 
 /** Detail pane's copy of an item: first one until another picked, and after delete. New item:
- *  draft without id. `submit` saves, keeps id, toasts `saved`. */
+ *  draft without id. `submit` saves, keeps id, toasts `saved`. Deep copy: nested fields
+ *  (tags, service functions) edited in draft must not change list before save. */
 export function useDraft<T extends { id?: string }>(
   list: Ref<T[]>,
   save: (item: T) => Promise<string>,
@@ -21,7 +22,7 @@ export function useDraft<T extends { id?: string }>(
     list,
     (items) => {
       if (!draft.value || (draft.value.id && !items.some((x) => x.id === draft.value!.id)))
-        draft.value = items[0] ? { ...items[0] } : null;
+        draft.value = items[0] ? structuredClone(toRaw(items[0])) : null;
     },
     { immediate: true },
   );

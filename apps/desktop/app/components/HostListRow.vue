@@ -22,6 +22,7 @@ const ring = (r: number, pct: number) => {
   const c = 2 * Math.PI * r;
   return `${(c * Math.max(0, Math.min(100, pct))) / 100} ${c}`;
 };
+const { worst: service } = useServiceHealth(() => props.host.id);
 const cpu = computed(() => props.last?.cpu ?? 0);
 const mem = computed(() => (props.last ? Math.round(memPct(props.last)) : 0));
 </script>
@@ -41,6 +42,13 @@ const mem = computed(() => (props.last ? Math.round(memPct(props.last)) : 0));
         <span class="min-w-0 flex-1">
           <span class="flex min-w-0 items-center gap-1.5">
             <span class="truncate font-medium">{{ hostName(host) }}</span>
+            <UIcon
+              v-if="service?.health === 'warn' || service?.health === 'crit'"
+              name="i-ph-warning-circle-duotone"
+              class="size-4 shrink-0"
+              :class="service.health === 'crit' ? 'text-error' : 'text-warning'"
+              :title="service.summary"
+            />
             <span
               v-for="t in tags"
               :key="t"

@@ -313,6 +313,34 @@ pub fn new_id() -> String {
     HEXLOWER.encode(&<[u8; 16]>::generate())
 }
 
+/// `*_list` and `*_save` commands for one vault kind: list fills ids in; save gives a new item
+/// an id and returns it. An id from outside must look like ours (hex): it names a vault entry
+/// and may name a file, so nothing else gets through.
+#[macro_export]
+macro_rules! kind_commands {
+    ($list:ident, $save:ident($arg:ident): $ty:ident, $kind:expr) => {
+        #[tauri::command]
+        pub fn $list(vault: tauri::State<'_, $crate::vault::Vault>) -> Result<Vec<$ty>, String> {
+            let items = vault.with(|v| v.list::<$ty>($kind))?;
+            Ok(items.into_iter().map(|(id, x)| $ty { id, ..x }).collect())
+        }
+
+        #[tauri::command]
+        pub fn $save(
+            vault: tauri::State<'_, $crate::vault::Vault>,
+            mut $arg: $ty,
+        ) -> Result<String, String> {
+            if $arg.id.is_empty() {
+                $arg.id = $crate::vault::new_id();
+            } else if !$arg.id.chars().all(|c| c.is_ascii_alphanumeric()) {
+                return Err("Not a saved item".into());
+            }
+            vault.with(|v| v.put(&$arg.id, $kind, &$arg))?;
+            Ok($arg.id)
+        }
+    };
+}
+
 fn aad(id: &str, kind: &str) -> Vec<u8> {
     format!("lynxterm/v1/item/{kind}/{id}").into_bytes()
 }
@@ -644,7 +672,7 @@ pub fn app_restart(app: AppHandle) {
     app.restart();
 }
 
-/// Host, group, snippet or key. Forwards use `forward_delete`, which also stops one.
+/// Host, group, snippet, service or key. Forwards use `forward_delete`, which also stops one.
 #[tauri::command]
 pub fn item_delete(vault: State<'_, Vault>, id: String) -> Result<(), String> {
     vault.with(|v| v.delete(&id))

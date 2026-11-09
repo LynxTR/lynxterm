@@ -10,6 +10,7 @@ mod keys;
 mod known_hosts;
 mod metrics;
 mod onboarding;
+mod services;
 mod sftp;
 mod snippets;
 mod ssh;
@@ -82,6 +83,11 @@ fn main() {
             groups::group_save,
             snippets::snippets_list,
             snippets::snippet_save,
+            services::services_list,
+            services::service_save,
+            services::service_check,
+            services::service_run,
+            services::service_command,
             forwards::forwards_list,
             forwards::forwards_running,
             forwards::forward_save,

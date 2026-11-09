@@ -10,6 +10,7 @@ export const SYNC_SECTIONS = [
     kinds: ["host", "key", "group", "forward"],
   },
   { id: "snippets", label: "Snippets", hint: "", kinds: ["snippet"] },
+  { id: "services", label: "Services", hint: "", kinds: ["service"] },
   { id: "history", label: "Command history", hint: "", kinds: ["history"] },
   {
     id: "activity",
@@ -62,6 +63,7 @@ const reload = () =>
     useHosts().refresh(),
     useGroups().refresh(),
     useSnippets().refresh(),
+    useServices().refresh(),
     useForwards().refresh(),
     useHistory().load(),
   ]);

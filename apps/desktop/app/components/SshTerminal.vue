@@ -15,6 +15,8 @@ export interface SshTarget {
   user: string;
   password: string;
   keyId: string;
+  /** Runs instead of a shell (service action); tab ends with it. */
+  command?: string;
 }
 
 export type SessionState = "connecting" | "open" | "closed";
@@ -315,7 +317,9 @@ const SETUP = (() => {
   // Only bash and zsh run it; other shells fail the test.
   return ` [ -n "$BASH_VERSION$ZSH_VERSION" ] && eval "$(printf %s '${btoa(script)}' | base64 -d)"\r`;
 })();
-let setup: "wait" | "hidden" | "done" = settings.terminalStyle !== "raw" ? "wait" : "done";
+// Command tabs have no shell to set up.
+let setup: "wait" | "hidden" | "done" =
+  settings.terminalStyle !== "raw" && !props.target.command ? "wait" : "done";
 let timer: ReturnType<typeof setTimeout> | undefined;
 let held = ""; // output while hidden
 let typedAhead = ""; // keys pressed while hidden

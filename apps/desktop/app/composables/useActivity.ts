@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 // Actions per host, kept in vault (activity.rs).
 export type Activity = {
   at: number; // unix seconds
-  kind: "snippet" | "key" | "upload" | "download" | "monitoring" | "integration";
+  kind: "snippet" | "key" | "upload" | "download" | "monitoring" | "integration" | "service";
   title: string;
   detail?: string;
   ok?: boolean;

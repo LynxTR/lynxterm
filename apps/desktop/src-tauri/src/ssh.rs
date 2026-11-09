@@ -163,9 +163,21 @@ pub async fn connect_saved(
     Ok((h, session))
 }
 
-/// Returns combined output; non-zero exit is error. Script goes to `sh` on stdin, so it
-/// works whatever the login shell (even fish).
+/// Returns combined output; non-zero exit is error.
 pub async fn exec(session: &Handle, script: &str) -> Result<String, String> {
+    let (status, output) = exec_status(session, script).await?;
+    if status != 0 {
+        return Err(format!(
+            "The server said (exit {status}): {}",
+            output.trim()
+        ));
+    }
+    Ok(output)
+}
+
+/// Exit status and combined output. Script goes to `sh` on stdin, so it works whatever the
+/// login shell (even fish).
+pub async fn exec_status(session: &Handle, script: &str) -> Result<(u32, String), String> {
     let mut channel = session.channel_open_session().await.map_err(describe)?;
     channel.exec(true, "sh -s").await.map_err(describe)?;
     channel.data(script.as_bytes()).await.map_err(describe)?;
@@ -181,14 +193,7 @@ pub async fn exec(session: &Handle, script: &str) -> Result<String, String> {
             _ => {}
         }
     }
-    let output = String::from_utf8_lossy(&output).into_owned();
-    if status != 0 {
-        return Err(format!(
-            "The server said (exit {status}): {}",
-            output.trim()
-        ));
-    }
-    Ok(output)
+    Ok((status, String::from_utf8_lossy(&output).into_owned()))
 }
 
 #[tauri::command]
@@ -206,6 +211,7 @@ pub async fn ssh_open(
     cols: u32,
     rows: u32,
     on_data: Channel<InvokeResponseBody>,
+    command: Option<String>,
 ) -> Result<u32, String> {
     let session = connect(&vault, &host, port, &user, &password, &key_id, trust).await?;
     let mut channel = session.channel_open_session().await.map_err(describe)?;
@@ -213,7 +219,11 @@ pub async fn ssh_open(
         .request_pty(false, "xterm-256color", cols, rows, 0, 0, &[])
         .await
         .map_err(describe)?;
-    channel.request_shell(false).await.map_err(describe)?;
+    // Command (service action): runs instead of shell; tab ends when it does.
+    match command {
+        Some(c) => channel.exec(false, c).await.map_err(describe)?,
+        None => channel.request_shell(false).await.map_err(describe)?,
+    }
 
     let id = sessions.next.fetch_add(1, Ordering::Relaxed);
     let (tx, mut rx) = unbounded_channel();

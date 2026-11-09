@@ -10,7 +10,10 @@ const defaults = {
   /** raw: plain, no hooks typed */
   terminalStyle: "blocks" as "blocks" | "plain" | "raw",
   /** Minutes between each sync section's turns (SYNC_SECTIONS). */
-  syncEvery: { hosts: 5, snippets: 60, history: 1440, activity: 60 } as Record<string, number>,
+  syncEvery: { hosts: 5, snippets: 60, services: 60, history: 1440, activity: 60 } as Record<
+    string,
+    number
+  >,
   /** Saved host ids user stopped watching (isWatched). */
   unwatchedHosts: [] as string[],
   /** user@host:port where user turned 7-day history off. Every other watched server gets it
@@ -71,7 +74,14 @@ export function maskHost(host: string) {
   return [parts[0], ...parts.slice(1, -1).map(() => "•"), parts.at(-1)].join(".");
 }
 
-export type View = "hosts" | "keychain" | "snippets" | "forwards" | "known" | "settings";
+export type View =
+  | "hosts"
+  | "keychain"
+  | "snippets"
+  | "services"
+  | "forwards"
+  | "known"
+  | "settings";
 
 const view = ref<View>("hosts");
 export const useView = () => view;

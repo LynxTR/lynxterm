@@ -9,7 +9,7 @@ use tauri::async_runtime::JoinHandle;
 use tokio::net::TcpListener;
 
 use crate::ssh;
-use crate::vault::{Vault, new_id};
+use crate::vault::Vault;
 
 const KIND: &str = "forward";
 
@@ -25,6 +25,8 @@ pub struct Forward {
     remote_port: u16,
 }
 
+crate::kind_commands!(forwards_list, forward_save(forward): Forward, KIND);
+
 /// Running tunnels by forward id. Aborting task closes listener.
 #[derive(Default)]
 pub struct Running(Mutex<HashMap<String, JoinHandle<()>>>);
@@ -38,27 +40,8 @@ impl Running {
 }
 
 #[tauri::command]
-pub fn forwards_list(vault: State<'_, Vault>) -> Result<Vec<Forward>, String> {
-    let forwards = vault.with(|v| v.list::<Forward>(KIND))?;
-    Ok(forwards
-        .into_iter()
-        .map(|(id, f)| Forward { id, ..f })
-        .collect())
-}
-
-#[tauri::command]
 pub fn forwards_running(running: State<'_, Running>) -> Vec<String> {
     running.0.lock().unwrap().keys().cloned().collect()
-}
-
-#[tauri::command]
-/// Returns id, generated if new.
-pub fn forward_save(vault: State<'_, Vault>, mut forward: Forward) -> Result<String, String> {
-    if forward.id.is_empty() {
-        forward.id = new_id();
-    }
-    vault.with(|v| v.put(&forward.id, KIND, &forward))?;
-    Ok(forward.id)
 }
 
 #[tauri::command]
