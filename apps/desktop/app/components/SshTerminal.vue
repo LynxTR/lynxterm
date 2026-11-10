@@ -520,8 +520,7 @@ term.attachCustomKeyEventHandler((e) => {
   return false;
 });
 
-const onData = new Channel<ArrayBuffer>();
-onData.onmessage = (buf) => {
+function onData(buf: ArrayBuffer) {
   if (buf.byteLength) return receive(new Uint8Array(buf));
   // Empty frame: session ended.
   if (setup === "hidden") finishSetup(held);
@@ -529,7 +528,7 @@ onData.onmessage = (buf) => {
   offer.value = false;
   term.write("\r\n\x1b[90m[session closed]\x1b[0m\r\n");
   state.value = "closed";
-};
+}
 function send(data: string) {
   track(data);
   invoke("ssh_write", { id, data });
@@ -620,7 +619,9 @@ async function open(trust?: string) {
       trust,
       cols: term.cols,
       rows: term.rows,
-      onData,
+      // New channel each try: Tauri unregisters one once Rust drops it (failed open, ended
+      // session), so a reused one gets nothing after trust or retry.
+      onData: new Channel<ArrayBuffer>(onData),
     });
     if (password.value && remember.value && saved.value) {
       const { host, port, user } = props.target;
