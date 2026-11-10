@@ -567,6 +567,7 @@ const echo = localEcho(
   pending,
 );
 const echoing = computed(echo.visible);
+const waiting = computed(echo.waiting);
 
 // ── Caret ──────────────────────────────────────────────────────────────
 // Glides, blinks when idle, sits after grey echo: one cursor, never two.
@@ -897,7 +898,7 @@ onBeforeUnmount(() => {
               >{{ pending.text }}</span
             >
             <span
-              v-if="rest && (echoing || !pending.text)"
+              v-if="rest && !waiting && (echoing || !pending.text)"
               aria-hidden="true"
               class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-dimmed"
               :style="{
@@ -907,6 +908,19 @@ onBeforeUnmount(() => {
               }"
               >{{ rest }}</span
             >
+            <!-- Enter sent, server not answered yet -->
+            <span
+              v-if="waiting"
+              aria-hidden="true"
+              class="lt-late pointer-events-none absolute flex items-center"
+              :style="{
+                left: `${(caret.x + 1) * view.cellWidth}px`,
+                top: `${(caret.y - view.y) * view.rowHeight}px`,
+                height: `${view.rowHeight}px`,
+              }"
+            >
+              <UIcon name="i-ph-circle-notch" class="size-3 animate-spin text-dimmed" />
+            </span>
             <!-- whole pixels via transform: fractional `left` leaves stray pixel in WebKitGTK -->
             <span
               v-if="

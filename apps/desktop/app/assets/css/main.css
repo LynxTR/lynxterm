@@ -29,6 +29,16 @@
   animation: lt-blink 1.06s step-end infinite;
 }
 
+/* Hidden first 150ms: quick answer never flashes. */
+@keyframes lt-late {
+  from {
+    opacity: 0;
+  }
+}
+.lt-late {
+  animation: lt-late 0s 150ms backwards;
+}
+
 @theme {
   --font-sans: system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;

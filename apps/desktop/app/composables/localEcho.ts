@@ -1,6 +1,7 @@
 // Slow link: typed text grey at cursor till server echoes (as Mosh). Drawn over terminal,
 // never written: wrong guess just vanishes. Grey only after server echoed a key on this line:
-// non-echoing prompt (password) never shows typed text.
+// non-echoing prompt (password) never shows typed text. Enter keeps grey and caret put till
+// server moves cursor (`sent`).
 
 interface EchoScreen {
   readonly cols: number;
@@ -17,8 +18,9 @@ interface EchoScreen {
 /** Faster round trip: echo arrives before grey shows. */
 const SLOW_MS = 30;
 
-/** `text` waits for server at cell x, y. `echoes`: server echoed a key on this line. */
-export const echoState = () => ({ text: "", x: 0, y: 0, echoes: false, latency: 0 });
+/** `text` waits for server at cell x, y. `echoes`: server echoed a key on this line.
+ * `sent`: Enter pressed, server not answered yet. */
+export const echoState = () => ({ text: "", x: 0, y: 0, echoes: false, latency: 0, sent: false });
 
 /** Caller passes `pending`: can be reactive. */
 export function localEcho(screen: EchoScreen, pending = echoState()) {
@@ -26,12 +28,19 @@ export function localEcho(screen: EchoScreen, pending = echoState()) {
 
   function clear(newLine = false) {
     pending.text = "";
+    pending.sent = false;
     sentAt = [];
     if (newLine) pending.echoes = false;
   }
 
   /** Every key, before server. */
   function key(data: string) {
+    if (pending.sent) clear(true); // typed ahead: next line, position unknown
+    if (data === "\r" && !screen.unsafe()) {
+      if (!pending.text) Object.assign(pending, screen.cursor());
+      pending.sent = true;
+      return;
+    }
     if (data === "\r" || data === "\x03" || data === "\x04") return clear(true);
     if (data === "\x7f" || data === "\b") {
       pending.text = pending.text.slice(0, -1);
@@ -58,15 +67,22 @@ export function localEcho(screen: EchoScreen, pending = echoState()) {
       if (c !== pending.text[n]) return clear(true);
       n++;
     }
-    if (!n) return;
-    const took = performance.now() - sentAt[n - 1]!;
-    pending.latency = pending.latency ? pending.latency * 0.7 + took * 0.3 : took;
-    pending.echoes = true;
-    pending.text = pending.text.slice(n);
-    pending.x += n;
-    sentAt = sentAt.slice(n);
+    if (n) {
+      const took = performance.now() - sentAt[n - 1]!;
+      pending.latency = pending.latency ? pending.latency * 0.7 + took * 0.3 : took;
+      pending.echoes = true;
+      pending.text = pending.text.slice(n);
+      pending.x += n;
+      sentAt = sentAt.slice(n);
+    }
+    // Server cursor sits at first unechoed cell till Enter is answered.
+    const at = screen.cursor();
+    if (pending.sent && (at.x !== pending.x || at.y !== pending.y)) clear(true);
   }
 
-  const visible = () => !!pending.text && pending.echoes && pending.latency > SLOW_MS;
-  return { pending, visible, key, settle };
+  const slow = () => pending.latency > SLOW_MS;
+  const visible = () => !!pending.text && pending.echoes && slow();
+  /** Enter sent, no answer yet: spinner. */
+  const waiting = () => pending.sent && slow();
+  return { pending, visible, waiting, key, settle };
 }

@@ -59,5 +59,22 @@ test("server showing something else wins, Enter starts over", async () => {
   echo.key("c");
   expect(echo.visible()).toBe(false); // must echo again first
   echo.key("\r");
+  expect(echo.visible()).toBe(false);
+});
+
+test("Enter keeps grey and waits till server moves cursor", async () => {
+  const { echo, server } = setup("$ ");
+  echo.key("a");
+  await new Promise((r) => setTimeout(r, 40));
+  server("a", 2);
+  echo.key("b");
+  echo.key("\r");
+  expect(echo.visible()).toBe(true); // caret stays after "b"
+  expect(echo.waiting()).toBe(true);
+  await new Promise((r) => setTimeout(r, 40));
+  server("b", 3); // echoed, newline not yet
+  expect(echo.waiting()).toBe(true);
+  server("\n", 4); // cursor moves on
+  expect(echo.waiting()).toBe(false);
   expect(echo.pending.text).toBe("");
 });
