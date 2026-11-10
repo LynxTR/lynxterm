@@ -50,7 +50,6 @@ const term = new Terminal({
   cursorStyle: "bar",
   cursorInactiveStyle: "none",
   scrollback: 10_000,
-  allowProposedApi: true,
   theme: {
     background: token("--ui-bg", "#0b0d10"),
     foreground: FOREGROUND,

@@ -93,6 +93,52 @@ const installed = (s: Service) => {
   return !!r && r.health !== "missing" && r.health !== "unknown";
 };
 const services = computed(() => available.value.filter((s) => !isBuiltIn(s) || installed(s)));
+
+// Passwords stay on after switch: turning off (services/ssh.sh) needs key session, so dead
+// key can't lock out.
+const keyOnlyName = serviceTemplates.find((t) => t.id === "builtin:ssh")?.name;
+const switchOpen = ref(false);
+const switching = ref(false);
+const pick = reactive({ keyId: "new", password: "" });
+const keyItems = computed(() => [
+  { label: "New key", value: "new" },
+  ...keys.value.map((k) => ({ label: k.name, value: k.id })),
+]);
+function openSwitch() {
+  Object.assign(pick, { keyId: "new", password: "" });
+  switchOpen.value = true;
+}
+const switchToKey = () =>
+  withBusy(switching, async () => {
+    const h = props.host;
+    const id =
+      pick.keyId === "new"
+        ? await invoke<string>("key_generate", { name: h.name || h.host })
+        : pick.keyId;
+    await useKeys().refresh();
+    await invoke("key_install", { id, hostId: h.id, password: pick.password, useForHost: true });
+    await useHosts().refresh();
+    const name = keys.value.find((k) => k.id === id)?.name ?? "";
+    logActivity(h, {
+      kind: "key",
+      title: `Installed key ${name}`,
+      detail: "added to ~/.ssh/authorized_keys",
+    });
+    switchOpen.value = false;
+    const keyOnly = available.value.find((s) => s.name === keyOnlyName);
+    useToast().add({
+      title: `${hostName(h)} now signs in with key ${name}`,
+      description: "The server still takes passwords too.",
+      icon: "i-ph-check",
+      actions: keyOnly && [
+        {
+          label: "Turn off passwords",
+          color: "primary",
+          onClick: () => void runAction(savedHost(h)!, keyOnly, "fix"),
+        },
+      ],
+    });
+  });
 // Checked ones only: nothing is offered that detect is about to find installed.
 const installMenu = computed(() => [
   available.value
@@ -123,11 +169,17 @@ function actionsFor(s: Service) {
     label,
     run: () => runAction(props.host, s, fn),
   });
-  if (!r || r.health === "unknown") return [];
+  // Key-only check "unknown" without sudo; detect worked: fix still offered.
+  const keyOnly = s.name === keyOnlyName && !!r?.version;
+  if (!r || (r.health === "unknown" && !keyOnly)) return [];
   if (r.health === "missing") return has("install") ? [act("install", "Install")] : [];
   return [
-    ...((r.health === "warn" || r.health === "crit") && has("fix")
-      ? [act("fix", s.fixLabel || "Fix")]
+    ...((r.health === "warn" || r.health === "crit" || r.health === "unknown") && has("fix")
+      ? [
+          s.name === keyOnlyName && !props.host.keyId
+            ? { label: "Switch to a key first", run: openSwitch }
+            : act("fix", s.fixLabel || "Fix"),
+        ]
       : []),
     ...(r.update && has("upgrade") ? [act("upgrade", "Upgrade")] : []),
     ...(has("logs") ? [act("logs", "Logs")] : []),
@@ -137,7 +189,8 @@ function actionsFor(s: Service) {
  *  newest), and Uninstall. */
 const moreFor = (s: Service) => {
   const r = results.value[s.id!];
-  if (!r || r.health === "missing" || r.health === "unknown") return [];
+  const keyOnly = s.name === keyOnlyName;
+  if (!r || r.health === "missing" || (r.health === "unknown" && !keyOnly)) return [];
   const items = [];
   if (s.functions.upgrade !== undefined && !r.update)
     items.push({
@@ -147,8 +200,8 @@ const moreFor = (s: Service) => {
     });
   if (s.functions.uninstall !== undefined)
     items.push({
-      label: "Uninstall",
-      icon: "i-ph-trash-duotone",
+      label: keyOnly ? "Allow passwords again" : "Uninstall",
+      icon: keyOnly ? "i-ph-lock-open-duotone" : "i-ph-trash-duotone",
       color: "error" as const,
       onSelect: () => runAction(props.host, s, "uninstall"),
     });
@@ -284,6 +337,19 @@ function when(at: number) {
             </dd>
           </template>
           <dd v-else>Password, asked each time</dd>
+          <template v-if="!host.keyId">
+            <dt />
+            <dd>
+              <UButton
+                icon="i-ph-key-duotone"
+                label="Switch to a key"
+                variant="link"
+                size="xs"
+                class="px-0"
+                @click="openSwitch"
+              />
+            </dd>
+          </template>
           <template v-if="host.os">
             <dt class="text-muted">System</dt>
             <dd class="capitalize">{{ host.os }}</dd>
@@ -468,6 +534,32 @@ function when(at: number) {
           form="reveal-form"
           label="Show"
           :loading="revealing"
+        />
+      </template>
+    </UModal>
+
+    <UModal v-model:open="switchOpen" :title="`Sign in to ${hostName(host)} with a key`">
+      <template #body>
+        <form id="switch-form" class="flex flex-col gap-4" @submit.prevent="switchToKey">
+          <UFormField label="Key">
+            <USelect v-model="pick.keyId" :items="keyItems" class="w-full" />
+          </UFormField>
+          <UFormField v-if="!host.savedPassword" label="Password" hint="To sign in this one time">
+            <UInput v-model="pick.password" type="password" required class="w-full" />
+          </UFormField>
+          <p class="text-sm text-muted">
+            Adds the public key to <span class="font-mono">~/.ssh/authorized_keys</span>, then signs
+            in with it from now on. Password sign-in stays on until you turn it off.
+          </p>
+        </form>
+      </template>
+      <template #footer>
+        <UButton
+          color="primary"
+          type="submit"
+          form="switch-form"
+          label="Switch"
+          :loading="switching"
         />
       </template>
     </UModal>

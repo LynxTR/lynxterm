@@ -48,11 +48,8 @@ function pick(path: string) {
 const generateOpen = ref(false);
 const newName = ref("");
 async function generate() {
-  await invoke("key_generate", { name: newName.value });
+  selectedId.value = await invoke<string>("key_generate", { name: newName.value });
   await refresh();
-  selectedId.value =
-    keys.value.filter((k) => k.name === newName.value).sort((a, b) => b.createdAt - a.createdAt)[0]
-      ?.id ?? null;
   generateOpen.value = false;
 }
 function openGenerate() {

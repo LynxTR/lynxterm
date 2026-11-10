@@ -37,13 +37,19 @@ const health = ref<Record<string, Record<string, ServiceHealth>>>({});
 const checking = ref(new Set<string>());
 
 const firstLine = (s: string) => s.trim().split("\n")[0] ?? "";
-const run = (h: SavedHost, serviceId: string, fn: "detect" | "preflight" | "check") =>
+const run = (
+  h: SavedHost,
+  serviceId: string,
+  fn: "detect" | "preflight" | "check",
+  fresh = false,
+) =>
   invoke<{ code: number; output: string }>("service_run", {
     serviceId,
     function: fn,
     session: useSessions().sessionFor(h) ?? null,
     hostId: h.id,
     auth: h.keyId ? "publickey" : "password",
+    fresh,
   });
 
 async function checkOne(h: SavedHost, s: Service): Promise<ServiceHealth> {
@@ -146,7 +152,33 @@ export async function runAction(h: SavedHost, s: Service, fn: ServiceFunction) {
       stop();
       if (!started) return;
       logActivity(h, { kind: "service", title: `Ran ${fn} of ${s.name}` });
-      void checkHost(h, (x) => x.id === s.id);
+      void (async () => {
+        // Key hosts: check once over a new connection. ssh.sh takes it as proof the key
+        // still gets in; without it the server undoes key-only by itself.
+        if (h.keyId && s.functions.check !== undefined) {
+          let failed: unknown;
+          // Three tries: sshd may still be reloading.
+          for (let i = 0; i < 3; i++) {
+            failed = await run(h, s.id!, "check", true).then(
+              () => undefined,
+              (e) => e,
+            );
+            if (failed === undefined) break;
+            await new Promise((r) => setTimeout(r, 3000));
+          }
+          if (failed !== undefined) {
+            toast.add({
+              title: `Couldn't sign in to ${hostName(h)} again`,
+              description: String(failed),
+              color: "error",
+            });
+            // ssh.sh undoes unconfirmed key-only after 2 minutes: show what it ended as.
+            setTimeout(() => void checkHost(h, (x) => x.id === s.id), 150_000);
+          }
+          if (!isWatched(h)) await invoke("metrics_unwatch", { hostId: h.id }).catch(() => {});
+        }
+        await checkHost(h, (x) => x.id === s.id);
+      })();
     },
   );
 }

@@ -3,6 +3,7 @@ use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use chacha20poly1305::aead::Generate;
+use russh::Disconnect;
 use russh::keys::ssh_key::LineEnding;
 use russh::keys::ssh_key::private::Ed25519Keypair;
 use russh::keys::{HashAlg, PrivateKey, decode_secret_key, load_secret_key};
@@ -92,12 +93,14 @@ pub fn keys_list(vault: State<'_, Vault>) -> Result<Vec<KeyMeta>, String> {
 }
 
 #[tauri::command]
-pub fn key_generate(vault: State<'_, Vault>, name: String) -> Result<(), String> {
+pub fn key_generate(vault: State<'_, Vault>, name: String) -> Result<String, String> {
     let seed = Zeroizing::new(<[u8; 32]>::generate());
     let mut key = PrivateKey::from(Ed25519Keypair::from_seed(&seed));
     key.set_comment(format!("{name}@lynxterm"));
     let stored = to_stored(name, &key, "generated")?;
-    vault.with(|v| v.put(&new_id(), KIND, &stored))
+    let id = new_id();
+    vault.with(|v| v.put(&id, KIND, &stored))?;
+    Ok(id)
 }
 
 /// Needs master password again.
@@ -150,6 +153,14 @@ pub async fn key_install(
     );
     ssh::exec(&session, &command).await?;
     if use_for_host {
+        // Switch only after key signs in: server ignoring it (StrictModes, other
+        // AuthorizedKeysFile, PubkeyAuthentication no) leaves host unreachable.
+        let tried = ssh::connect(&vault, &host.host, host.port, &host.user, "", &id, None)
+            .await
+            .map_err(|e| {
+                format!("The key is on the server, but signing in with it failed ({e}). The host still uses its password.")
+            })?;
+        let _ = tried.disconnect(Disconnect::ByApplication, "", "en").await;
         host.key_id = id;
         host.id = host_id;
         vault.with(|v| v.put(&host.id, hosts::KIND, &host))?;

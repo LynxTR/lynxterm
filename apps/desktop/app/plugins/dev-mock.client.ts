@@ -75,6 +75,23 @@ export default defineNuxtPlugin(() => {
       ? []
       : [key("k1", "deploy-2026", 1795), key("k2", "homelab", 1802), key("k3", "github", 0)],
     keys_scan: ["~/.ssh/id_ed25519", "~/.ssh/id_rsa"],
+    key_generate: ({ name }: { name: string }) => {
+      const id = `k${Date.now()}`;
+      (data.keys_list as Item[]).push(key(id, name, 0));
+      return id;
+    },
+    key_install: ({
+      id,
+      hostId,
+      useForHost,
+    }: {
+      id: string;
+      hostId: string;
+      useForHost: boolean;
+    }) => {
+      const h = (data.hosts_list as Item[]).find((x) => x.id === hostId);
+      if (h && useForHost) h.keyId = id;
+    },
     hosts_list: firstRun
       ? []
       : [
@@ -85,7 +102,11 @@ export default defineNuxtPlugin(() => {
           host("h2", "api-prod-2", "production", "deploy", "10.0.4.13", "ubuntu", ["nginx"]),
           host("h3", "db-primary", "production", "postgres", "10.0.5.2", "debian", ["postgres"]),
           host("h4", "nas.local", "homelab", "admin", "192.168.1.20", "alpine"),
-          host("h5", "proxmox", "homelab", "root", "192.168.1.10", "debian"),
+          {
+            ...host("h5", "proxmox", "homelab", "root", "192.168.1.10", "debian"),
+            keyId: "",
+            savedPassword: true,
+          },
         ],
     groups_list: firstRun
       ? []
@@ -119,15 +140,42 @@ export default defineNuxtPlugin(() => {
       },
     ],
     service_save: ({ service }: { service: Item }) => upsert("services_list", service, "sv"),
+    item_delete: ({ id }: { id: string }) => {
+      for (const list of Object.values(data)) {
+        if (!Array.isArray(list)) continue;
+        const i = (list as Item[]).findIndex((x) => x?.id === id);
+        if (i >= 0) list.splice(i, 1);
+      }
+    },
     // No sh in a browser: always valid. ?shError shows the error look.
     service_check: ({ script }: { script: string }) =>
       params.has("shError")
         ? `sh: ${script.split("\n").length}: Syntax error: end of file unexpected (expecting "fi")`
         : null,
-    service_run: async ({ serviceId, function: fn }: { serviceId: string; function: string }) => {
+    service_run: async ({
+      serviceId,
+      function: fn,
+      auth,
+    }: {
+      serviceId: string;
+      function: string;
+      auth: string;
+    }) => {
       await new Promise((r) => setTimeout(r, 400));
-      if (fn === "preflight") return { code: 1, output: "Will ask for sudo password\n" };
       const builtin = serviceId.startsWith("builtin:") ? serviceId.slice(8) : "";
+      if (builtin === "ssh" && fn === "preflight")
+        return auth === "publickey"
+          ? { code: 1, output: "Password sign-in stops for every user on this server, root too\n" }
+          : {
+              code: 2,
+              output:
+                "Sign in with a key first, or this locks you out: switch the host to a key, then try again\n",
+            };
+      if (fn === "preflight") return { code: 1, output: "Will ask for sudo password\n" };
+      if (builtin === "ssh")
+        return fn === "detect"
+          ? { code: 0, output: "OpenSSH_9.6p1\n" }
+          : { code: 1, output: "Password sign-in on\n" };
       if (fn === "detect" && builtin)
         return builtin === "node"
           ? { code: 0, output: "Node.js v22.17.0\nupdate: v26.13.0\n" }

@@ -41,6 +41,24 @@ async function forget() {
   await remove(s.id!);
 }
 
+// Built-in with draft's name. Not saved: draft is that built-in, saving makes own copy that
+// replaces it. Saved: own copy hides it and misses its updates; deleting brings it back.
+const template = computed(() => serviceTemplates.find((t) => t.name === draft.value?.name));
+async function reset() {
+  const s = draft.value!;
+  const t = template.value;
+  if (!t) return;
+  const ok = await askConfirm({
+    title: `Reset ${s.name} to the built-in?`,
+    description:
+      "Deletes your edited copy on every device. The built-in takes its place, and follows LynxTerm updates. Servers keep what it installed.",
+    label: "Reset",
+  });
+  if (!ok) return;
+  await remove(s.id!);
+  pick(t);
+}
+
 const SHARED_EXAMPLE = 'PKGS="docker-ce docker-ce-cli containerd.io"';
 const count = (text: string | undefined) => (text ?? "").split("\n").length;
 const rows = (body: string | undefined, example: string) => count(body || example);
@@ -186,8 +204,19 @@ const mark = (n: number) =>
     <main v-if="draft" :key="draft.id ?? 'new'" class="pane max-w-[900px]">
       <div class="flex flex-wrap items-center gap-3">
         <h2 class="t-heading">{{ draft.name || "New service" }}</h2>
-        <UBadge v-if="!draft.id" label="not saved yet" class="font-mono" />
+        <UBadge
+          v-if="!draft.id"
+          :label="template ? 'built-in' : 'not saved yet'"
+          class="font-mono"
+        />
         <div v-if="draft.id" class="ml-auto flex flex-wrap gap-2">
+          <UButton
+            v-if="template"
+            icon="i-ph-arrow-counter-clockwise-duotone"
+            label="Reset to built-in"
+            variant="ghost"
+            @click="reset"
+          />
           <UButton icon="i-ph-copy-duotone" label="Duplicate" variant="ghost" @click="duplicate" />
           <UButton icon="i-ph-trash-duotone" label="Delete" variant="ghost" @click="forget" />
         </div>
@@ -430,7 +459,16 @@ const mark = (n: number) =>
           </div>
         </div>
 
-        <UButton color="primary" type="submit" label="Save" class="self-end" />
+        <div class="flex items-center justify-end gap-3">
+          <span v-if="!draft.id && template" class="text-sm text-muted">
+            The built-in stays as it is. Your copy is used on your hosts in its place.
+          </span>
+          <UButton
+            color="primary"
+            type="submit"
+            :label="!draft.id && template ? 'Save as your own copy' : 'Save'"
+          />
+        </div>
       </form>
 
       <p class="hint">

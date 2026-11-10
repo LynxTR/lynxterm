@@ -27,13 +27,14 @@ const FUNCTIONS: [&str; 8] = [
 const BACKGROUND: [&str; 3] = ["detect", "preflight", "check"];
 /// Bundled services (/services) by file name; their ids are builtin:<name>. The frontend
 /// bundles the same folder; a test keeps this list matching it.
-const BUILTIN: [(&str, &str); 6] = [
+const BUILTIN: [(&str, &str); 7] = [
     ("bun", include_str!("../../../../services/bun.sh")),
     ("deno", include_str!("../../../../services/deno.sh")),
     ("go", include_str!("../../../../services/go.sh")),
     ("node", include_str!("../../../../services/node.sh")),
     ("php", include_str!("../../../../services/php.sh")),
     ("rust", include_str!("../../../../services/rust.sh")),
+    ("ssh", include_str!("../../../../services/ssh.sh")),
 ];
 
 /// Kept apart so editor locks function lines; assembled into a file when run.
@@ -155,13 +156,22 @@ pub async fn service_run(
     session: Option<u32>,
     host_id: String,
     auth: String,
+    fresh: bool,
 ) -> Result<Ran, String> {
     if !BACKGROUND.contains(&function.as_str()) {
         return Err(format!("{function} runs in a terminal"));
     }
     auth_ok(&auth)?;
     let (text, _) = script_for(&vault, &service_id)?;
-    let script = format!("export LYNXTERM_AUTH={auth}\nset -- {function}\n{text}\n");
+    // fresh: connection opened now, never a reused one. Script sees LYNXTERM_FRESH and may
+    // take it as proof the server still lets this host in (ssh.sh undo timer).
+    let (session, env) = if fresh {
+        watched.forget(&host_id);
+        (None, "export LYNXTERM_FRESH=1\n")
+    } else {
+        (session, "")
+    };
+    let script = format!("export LYNXTERM_AUTH={auth}\n{env}set -- {function}\n{text}\n");
     let handle = watched.pick(&sessions, &vault, session, &host_id).await?;
     let ran = tokio::time::timeout(Duration::from_secs(20), ssh::exec_status(&handle, &script))
         .await
