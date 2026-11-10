@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// `filtered`: list has items, filter hides them all.
 defineProps<{ icon: string; title?: string; text: string; filtered?: boolean }>();
 </script>
 

@@ -9,7 +9,6 @@ export type Sample = {
   disk: number;
   load?: number;
   cores?: number;
-  /** Bytes/s in and out, all interfaces except loopback. */
   rx?: number;
   tx?: number;
 };
@@ -34,8 +33,6 @@ export function parseSamples(text: string): Sample[] {
   });
 }
 
-/** Peak per `n` equal time slots ending at `to` (max keeps short spikes); null where no samples:
- *  server off or no history kept. */
 export function buckets(
   samples: Sample[],
   value: (s: Sample) => number | undefined,
@@ -54,11 +51,9 @@ export function buckets(
   return out;
 }
 
-/** Fills gaps of up to `max` empty slots with value before, so once-a-minute history draws as
- *  line in shorter-slot chart. Longer gaps stay empty: server off or unreachable. */
 export function bridge(values: (number | null)[], max: number): (number | null)[] {
   const out = [...values];
-  let last = -1; // last filled index
+  let last = -1;
   out.forEach((v, i) => {
     if (v === null) return;
     if (last >= 0 && i - last - 1 <= max) out.fill(out[last]!, last + 1, i);

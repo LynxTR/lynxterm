@@ -1,5 +1,3 @@
-//! SFTP over open terminal session's connection.
-
 use std::path::{Path, PathBuf};
 
 use russh_sftp::client::SftpSession;
@@ -42,7 +40,6 @@ fn join(dir: &str, name: &str) -> String {
     format!("{}/{name}", dir.trim_end_matches('/'))
 }
 
-/// First free path in `dir`: name, name-1, name-2…
 pub fn free_path(dir: &Path, name: &str) -> PathBuf {
     (0..)
         .map(|n| {
@@ -56,7 +53,6 @@ pub fn free_path(dir: &Path, name: &str) -> PathBuf {
         .unwrap()
 }
 
-/// Empty `path`: login directory.
 #[tauri::command]
 pub async fn sftp_list(
     sessions: State<'_, Sessions>,
@@ -92,7 +88,6 @@ pub async fn sftp_list(
     Ok(Listing { path, entries })
 }
 
-/// Saves into Downloads folder; returns local path.
 #[tauri::command]
 pub async fn sftp_download(
     app: AppHandle,

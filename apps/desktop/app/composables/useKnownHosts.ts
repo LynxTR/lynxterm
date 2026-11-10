@@ -8,6 +8,9 @@ export interface KnownHost {
 }
 
 const knownHosts = ref<KnownHost[]>([]);
+/** Line names this host: `host`, or `[host]:port` off port 22. */
+export const knows = (k: KnownHost, h: { host: string; port: number }) =>
+  k.hosts.split(",").some((n) => n === h.host || n === `[${h.host}]:${h.port}`);
 
 export function useKnownHosts() {
   const refresh = async () => {

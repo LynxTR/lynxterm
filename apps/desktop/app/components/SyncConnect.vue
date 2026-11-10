@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// Enrolment token made here; user pastes it at Cloudflare's ENROLL_TOKEN prompt. Only first
-// device needs it; later ones only URL. `password` skips master password field (first run).
 const props = defineProps<{ password?: string }>();
 const sync = useSync();
 
@@ -31,7 +29,6 @@ async function connect() {
           />
           <UButton
             label="Copy"
-            color="neutral"
             variant="outline"
             @click="
               copyText(
@@ -43,7 +40,6 @@ async function connect() {
           />
           <UButton
             icon="i-ph-arrows-clockwise"
-            color="neutral"
             variant="outline"
             aria-label="New token"
             title="New token"

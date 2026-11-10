@@ -1,7 +1,6 @@
 import { expect, test } from "vite-plus/test";
 import { localEcho } from "../app/composables/localEcho";
 
-/** One-row screen; server "echoes" by writing into it. */
 function setup(prompt: string, unsafe = false) {
   const row: string[] = [...prompt];
   const echo = localEcho({
@@ -21,7 +20,7 @@ function setup(prompt: string, unsafe = false) {
 test("grey only after server echoed a key on this line, then confirmed away", async () => {
   const { echo, server } = setup("$ ");
   echo.key("l");
-  expect(echo.visible()).toBe(false); // line not known to echo yet
+  expect(echo.visible()).toBe(false);
   await new Promise((r) => setTimeout(r, 40)); // slow link
   server("l", 2);
   echo.key("s");
@@ -31,7 +30,7 @@ test("grey only after server echoed a key on this line, then confirmed away", as
   server("s", 3);
   expect(echo.pending).toMatchObject({ text: " ", x: 4 });
   echo.key("\x7f");
-  expect(echo.visible()).toBe(false); // nothing pending
+  expect(echo.visible()).toBe(false);
 });
 
 test("password prompt never shows typed text", async () => {
@@ -69,12 +68,12 @@ test("Enter keeps grey and waits till server moves cursor", async () => {
   server("a", 2);
   echo.key("b");
   echo.key("\r");
-  expect(echo.visible()).toBe(true); // caret stays after "b"
+  expect(echo.visible()).toBe(true);
   expect(echo.waiting()).toBe(true);
   await new Promise((r) => setTimeout(r, 40));
   server("b", 3); // echoed, newline not yet
   expect(echo.waiting()).toBe(true);
-  server("\n", 4); // cursor moves on
+  server("\n", 4);
   expect(echo.waiting()).toBe(false);
   expect(echo.pending.text).toBe("");
 });

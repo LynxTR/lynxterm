@@ -9,7 +9,6 @@ use crate::err;
 use crate::ssh::expand_home;
 
 #[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct KnownHost {
     /// 1-based line number, for delete.
     line: usize,

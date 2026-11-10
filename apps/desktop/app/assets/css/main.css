@@ -9,12 +9,12 @@
   unicode-range: U+23FB-23FE, U+2665, U+26A1, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
 }
 
-/* Command cards (termHtml.ts) */
 .lt-out {
   font:
     13px / var(--row) "JetBrains Mono",
     "Symbols Nerd Font Mono",
     monospace;
+  letter-spacing: var(--gap);
   color: #c9d1d9;
   white-space: pre-wrap;
   word-break: break-all;
@@ -42,11 +42,10 @@
 @theme {
   --font-sans: system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
-  --color-sunken: #0e1014; /* list columns, bars, section cards */
-  --color-row: #15191f; /* hovered or selected list row */
+  --color-sunken: #0e1014;
+  --color-row: #15191f;
 }
 
-/* Type scale; no ad-hoc text-[Npx] per view. */
 @utility t-title {
   font-size: 22px;
   line-height: 1.2;
@@ -77,34 +76,27 @@
   color: var(--ui-text-muted);
 }
 
-/* Section card and detail pane beside a list column. */
 @utility card {
   @apply rounded-[10px] border border-default bg-sunken;
 }
 @utility pane {
   @apply flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-7 pt-5 pb-7;
 }
-/* Settings block */
 @utility box {
   @apply flex max-w-3xl flex-col card;
 }
-/* Info line, icon first */
 @utility hint {
   @apply flex items-center gap-2 text-sm text-muted;
 }
-/* Command card strip */
 @utility card-head {
   @apply sticky top-0 z-[1] flex h-7 items-center gap-3 rounded-t-[10px] bg-sunken px-3 text-[11px] text-dimmed;
 }
-/* Services code editor, three looks never mixed: raised bar = locked line LynxTerm writes,
-   dark well with amber edge = code you write, dashed = function not added yet. */
 @utility code-gutter {
   @apply w-10 shrink-0 pr-3 text-right whitespace-pre text-dimmed select-none;
 }
 @utility code-lock {
   @apply flex min-h-7 items-center gap-2 bg-elevated pe-1 text-muted select-none;
 }
-/* CodeArea: box scrolls sideways; scrollbar adds height, never covers a line */
 @utility code-well {
   @apply min-w-0 flex-1 overflow-x-auto border-l-2 border-primary/30 [scrollbar-width:thin] focus-within:border-primary focus-within:bg-muted;
 }
@@ -115,11 +107,9 @@
 @utility code-add {
   @apply flex min-h-7 w-full items-center gap-2 border-t border-dashed border-accented pe-3 text-dimmed transition-colors hover:bg-muted hover:text-toned;
 }
-/* What a function does: sans, so never read as code */
 @utility code-hint {
   @apply ml-auto truncate font-sans text-xs text-dimmed;
 }
-/* data-active: current */
 @utility tab {
   @apply relative flex shrink-0 items-center gap-2 rounded-t-md border border-b-0 border-transparent text-[13px] text-muted transition-colors hover:bg-muted hover:text-default;
   &[data-active] {
@@ -127,7 +117,6 @@
   }
 }
 
-/* Motion: CSS only, click never waits. Animations replay when v-show shows again: no JS. */
 :root {
   --lt-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -148,7 +137,6 @@
 @utility animate-fade {
   animation: lt-fade 120ms ease-out both;
 }
-/* 25ms steps; past eighth all at once */
 :is(.stagger, .pane) > * {
   animation: lt-rise 260ms var(--lt-ease) both;
   animation-delay: 175ms;
@@ -185,7 +173,6 @@
   }
 }
 
-/* Home (outer) and terminals (inner) share one grid cell: depth zoom between them. */
 .lt-swap {
   grid-area: 1 / 1;
   min-width: 0;
@@ -227,7 +214,6 @@
   opacity: 0;
 }
 
-/* Design palette on Nuxt UI tokens, so every component picks it up. Dark-only app. */
 .dark {
   --ui-primary: #ffb020;
   --ui-success: #3ddc97;
@@ -235,12 +221,11 @@
   --ui-warning: #ffb020;
   --ui-error: #ff8a8a;
 
-  --ui-bg: #0b0d10; /* ground, terminal */
-  --ui-bg-muted: #111419; /* panels, sidebar, cards */
-  --ui-bg-elevated: #171b21; /* tiles, menus, modals */
-  --ui-bg-accented: #1e232b; /* selected rows */
+  --ui-bg: #0b0d10;
+  --ui-bg-muted: #111419;
+  --ui-bg-elevated: #171b21;
+  --ui-bg-accented: #1e232b;
 
-  /* hairlines between areas, around cards; controls use accented */
   --ui-border: #1e232b;
   --ui-border-muted: #171b21;
   --ui-border-accented: #2a3039;
@@ -250,8 +235,8 @@
   --ui-text-toned: #b4bcc6;
   --ui-text: #e6e9ee;
   --ui-text-highlighted: #f4f5f7;
-  --ui-text-inverted: #1a1200; /* on amber */
+  --ui-text-inverted: #1a1200;
 
   --ui-radius: 0.3333rem; /* rounded-md = 8px */
-  --ui-header-height: 3.5rem; /* dashboard navbars and sidebar header */
+  --ui-header-height: 3.5rem;
 }

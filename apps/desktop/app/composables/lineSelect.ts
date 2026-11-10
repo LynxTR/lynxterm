@@ -1,5 +1,3 @@
-/** Selection head on typed line: letter, or word with Ctrl (split on spaces: paths stay
- *  whole); Home/End to ends. */
 export function moveHead(text: string, head: number, key: string, word: boolean) {
   if (key === "Home") return 0;
   if (key === "End") return text.length;

@@ -16,16 +16,13 @@ async function signIn() {
   if (!signedOut.value) password.value = "";
 }
 
-// Recheck after each sync while open, so Cloudflare changes show.
 watch([url, busy], ([u, b]) => u && !b && sync.refreshStatus(), { immediate: true });
 
-// One check covers every section, so runs at most frequent interval.
 const checks = computed(() => {
   const on = SYNC_SECTIONS.filter((s) => !sync.isOff(s)).map(sync.every);
   if (!on.length) return "nothing syncs";
   const m = Math.min(...on);
-  const every =
-    m < 60 ? `every ${m} minutes` : m < 1440 ? "every hour" : m < 10080 ? "daily" : "weekly";
+  const every = SYNC_EVERY.find((o) => o.value === m)?.label.toLowerCase() ?? `every ${m} minutes`;
   return `checks ${every} while in use`;
 });
 </script>
@@ -39,7 +36,6 @@ const checks = computed(() => {
         v-if="url && !signedOut"
         icon="i-ph-arrows-clockwise"
         label="Sync now"
-        color="neutral"
         variant="outline"
         class="ml-auto"
         :loading="busy"
@@ -64,7 +60,7 @@ const checks = computed(() => {
           aria-label="New master password"
           class="flex-1"
         />
-        <UButton type="submit" label="Sign in" :loading="busy" />
+        <UButton color="primary" type="submit" label="Sign in" :loading="busy" />
       </UFieldGroup>
       <p v-if="error" class="text-sm text-error">{{ error }}</p>
     </form>

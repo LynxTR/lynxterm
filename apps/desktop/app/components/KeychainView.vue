@@ -50,7 +50,6 @@ const newName = ref("");
 async function generate() {
   await invoke("key_generate", { name: newName.value });
   await refresh();
-  // Select new key: newest with that name.
   selectedId.value =
     keys.value.filter((k) => k.name === newName.value).sort((a, b) => b.createdAt - a.createdAt)[0]
       ?.id ?? null;
@@ -64,43 +63,34 @@ function openGenerate() {
 const installOpen = ref(false);
 const install = reactive({ hostId: "", password: "", useForHost: true });
 const installing = ref(false);
-const hostItems = computed(() =>
-  hosts.value.map((h) => ({ label: hostName(h), description: hostLabel(h), value: h.id! })),
-);
 const installHost = computed(() => hosts.value.find((h) => h.id === install.hostId));
 function openInstall() {
   Object.assign(install, { hostId: hosts.value[0]?.id ?? "", password: "", useForHost: true });
   installOpen.value = true;
 }
-async function installKey() {
-  installing.value = true;
-  try {
-    await invoke("key_install", { id: selected.value!.id, ...install });
+const installKey = () =>
+  withBusy(installing, async () => {
+    try {
+      await invoke("key_install", { id: selected.value!.id, ...install });
+    } catch (e) {
+      if (installHost.value)
+        logActivity(installHost.value, {
+          kind: "key",
+          title: `Installing key ${selected.value!.name} failed`,
+          detail: String(e),
+          ok: false,
+        });
+      throw e;
+    }
     logActivity(installHost.value!, {
       kind: "key",
       title: `Installed key ${selected.value!.name}`,
       detail: "added to ~/.ssh/authorized_keys",
     });
     await useHosts().refresh();
-    toast.add({
-      title: `Installed on ${hostName(installHost.value!)}`,
-      icon: "i-ph-check",
-    });
+    toast.add({ title: `Installed on ${hostName(installHost.value!)}`, icon: "i-ph-check" });
     installOpen.value = false;
-  } catch (e) {
-    toast.add({ title: String(e), color: "error" });
-    if (installHost.value) {
-      logActivity(installHost.value, {
-        kind: "key",
-        title: `Installing key ${selected.value!.name} failed`,
-        detail: String(e),
-        ok: false,
-      });
-    }
-  } finally {
-    installing.value = false;
-  }
-}
+  });
 
 const exportOpen = ref(false);
 const exportPassword = ref("");
@@ -131,7 +121,6 @@ const keySync = computed(() => {
 });
 const lastSync = computed(() => (sync.ago.value === "not yet" ? "" : sync.ago.value));
 
-// Trail built from vault and sync state; no stored log.
 const date = (secs: number) =>
   new Date(secs * 1000).toLocaleDateString(undefined, { dateStyle: "medium" });
 const history = computed(() => {
@@ -174,8 +163,14 @@ const importKey = () =>
       :empty="!shown.length"
     >
       <template #actions>
-        <UButton label="Import" size="sm" color="neutral" variant="outline" @click="openImport" />
-        <UButton icon="i-ph-plus" label="Generate" size="sm" @click="openGenerate" />
+        <UButton label="Import" size="sm" variant="outline" @click="openImport" />
+        <UButton
+          color="primary"
+          icon="i-ph-plus"
+          label="Generate"
+          size="sm"
+          @click="openGenerate"
+        />
       </template>
       <ListRow
         v-for="k in shown"
@@ -210,17 +205,10 @@ const importKey = () =>
           <UButton
             label="Export…"
             size="sm"
-            color="neutral"
             variant="outline"
             @click="((exportOpen = true), (exportPassword = ''))"
           />
-          <UButton
-            label="Delete"
-            size="sm"
-            color="neutral"
-            variant="ghost"
-            @click="remove(selected.id)"
-          />
+          <UButton label="Delete" size="sm" variant="ghost" @click="remove(selected.id)" />
         </div>
       </div>
 
@@ -243,7 +231,6 @@ const importKey = () =>
           <UButton
             label="Copy"
             size="xs"
-            color="neutral"
             variant="ghost"
             class="ml-auto"
             @click="copyText(selected.publicKey, 'Public key copied')"
@@ -263,7 +250,6 @@ const importKey = () =>
           <UButton
             label="Install on host…"
             size="sm"
-            color="neutral"
             variant="outline"
             class="ml-auto"
             :disabled="!hosts.length"
@@ -312,7 +298,6 @@ const importKey = () =>
                 :key="path"
                 :label="path"
                 size="xs"
-                color="neutral"
                 :variant="form.source === path ? 'soft' : 'outline'"
                 class="font-mono"
                 @click="pick(path)"
@@ -343,7 +328,13 @@ const importKey = () =>
         <span class="mr-auto text-xs text-dimmed"
           >Stored encrypted in your vault, without the passphrase.</span
         >
-        <UButton type="submit" form="import-form" label="Import" :loading="importing" />
+        <UButton
+          color="primary"
+          type="submit"
+          form="import-form"
+          label="Import"
+          :loading="importing"
+        />
       </template>
     </UModal>
 
@@ -359,7 +350,13 @@ const importKey = () =>
         </form>
       </template>
       <template #footer>
-        <UButton type="submit" form="generate-form" label="Generate" icon="i-ph-key-duotone" />
+        <UButton
+          color="primary"
+          type="submit"
+          form="generate-form"
+          label="Generate"
+          icon="i-ph-key-duotone"
+        />
       </template>
     </UModal>
 
@@ -395,7 +392,13 @@ const importKey = () =>
         </form>
       </template>
       <template #footer>
-        <UButton type="submit" form="install-form" label="Install" :loading="installing" />
+        <UButton
+          color="primary"
+          type="submit"
+          form="install-form"
+          label="Install"
+          :loading="installing"
+        />
       </template>
     </UModal>
 

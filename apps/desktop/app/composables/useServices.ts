@@ -1,8 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/** Built-in services, bundled from /services, with ids like builtin:node. Usable on any host
- *  as they are; a copy saved from the Services page becomes the user's own (same name hides
- *  the built-in) and can be tuned. */
 export const serviceTemplates = Object.entries(
   import.meta.glob<string>("../../../../services/*.sh", {
     query: "?raw",
@@ -19,41 +16,24 @@ export const serviceTemplates = Object.entries(
 export const isBuiltIn = (s: { id?: string }) => !!s.id?.startsWith("builtin:");
 
 const services = ref<Service[]>([]);
-/** Own services, then built-ins not shadowed by an own one of the same name. */
 const available = computed(() => [
   ...services.value,
   ...serviceTemplates.filter((t) => !services.value.some((s) => s.name === t.name)),
 ]);
 
-export function useServices() {
-  const refresh = async () => {
-    services.value = (await invoke<Service[]>("services_list")).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    );
-  };
-  /** Resolves to id; new one for new service. */
-  const save = (service: Service) =>
-    invoke<string>("service_save", { service }).then((id) => refresh().then(() => id));
-  const remove = (id: string) => invoke("item_delete", { id }).then(refresh);
-  return { services, available, refresh, save, remove };
-}
+export const useServices = () => ({ services, available, ...vaultList(services, "service") });
 
 /** missing: detect says not installed. Rest from check's exit code. */
 export type Health = "ok" | "warn" | "crit" | "unknown" | "missing";
 interface ServiceHealth {
   health: Health;
-  /** check's first line, or why it couldn't run. */
   summary: string;
-  /** detect's first line, like "Docker version 27.3.1". */
   version: string;
-  /** Newer version, from detect's update: line. */
   update: string;
   at: number;
 }
 
-/** Latest results by host id, then service id. Memory only: checked again on connect. */
 const health = ref<Record<string, Record<string, ServiceHealth>>>({});
-/** Host ids being checked now. */
 const checking = ref(new Set<string>());
 
 const firstLine = (s: string) => s.trim().split("\n")[0] ?? "";
@@ -75,6 +55,7 @@ async function checkOne(h: SavedHost, s: Service): Promise<ServiceHealth> {
     update,
     at,
   });
+  if (!reachable(h)) return result("unknown", "Open a terminal to it first");
   try {
     const d = await run(h, s.id!, "detect");
     if (d.code !== 0) return result("missing", "Not installed");
@@ -89,8 +70,6 @@ async function checkOne(h: SavedHost, s: Service): Promise<ServiceHealth> {
   }
 }
 
-/** detect, then check, for each service (or `only` ones), one at a time over one connection:
- *  open terminal, else host's background one (needs a key or saved password). */
 export async function checkHost(h: SavedHost, only?: (s: Service) => boolean) {
   const list = useServices().available.value.filter((s) => !only || only(s));
   if (!list.length || checking.value.has(h.id!)) return [];
@@ -101,15 +80,7 @@ export async function checkHost(h: SavedHost, only?: (s: Service) => boolean) {
   try {
     for (const s of list) {
       const before = health.value[h.id!]?.[s.id!]?.health;
-      const result = reachable(h)
-        ? await checkOne(h, s)
-        : {
-            health: "unknown" as const,
-            summary: "Open a terminal to it first",
-            version: "",
-            update: "",
-            at: Date.now(),
-          };
+      const result = await checkOne(h, s);
       health.value[h.id!] = { ...health.value[h.id!], [s.id!]: result };
       done.push({ service: s, result, before });
     }
@@ -122,7 +93,7 @@ export async function checkHost(h: SavedHost, only?: (s: Service) => boolean) {
 
 /** Install, fix, upgrade, logs, uninstall: in a new terminal tab, where sudo can ask. Install,
  *  upgrade and fix change the server: preflight first when LynxTerm can (blocked stops,
- *  warnings ask). Uninstall always asks. Checked again when the tab's command ends. */
+ *  warnings ask). Uninstall always asks. */
 export async function runAction(h: SavedHost, s: Service, fn: ServiceFunction) {
   const toast = useToast();
   const changes = fn === "install" || fn === "upgrade" || fn === "fix";
@@ -173,21 +144,19 @@ export async function runAction(h: SavedHost, s: Service, fn: ServiceFunction) {
       if (session !== undefined) started = true;
       if (state !== "closed") return;
       stop();
-      if (!started) return; // never connected: tab says why
+      if (!started) return;
       logActivity(h, { kind: "service", title: `Ran ${fn} of ${s.name}` });
       void checkHost(h, (x) => x.id === s.id);
     },
   );
 }
 
-/** Open terminal, or background connection with a key or saved password. */
 const reachable = (h: SavedHost) =>
   useSessions().sessionFor(h) !== undefined || !!h.keyId || !!h.savedPassword;
 
 const RANK: Health[] = ["missing", "ok", "unknown", "warn", "crit"];
 export function useServiceHealth(hostId: () => string | undefined) {
   const results = computed(() => health.value[hostId() ?? ""] ?? {});
-  /** Worst result among current services, for hosts list. */
   const worst = computed(() =>
     useServices()
       .available.value.map((s) => results.value[s.id!])
@@ -200,9 +169,6 @@ export function useServiceHealth(hostId: () => string | undefined) {
   return { results, worst, busy };
 }
 
-/** Check on connect: when a terminal connects to a saved host. Check every: on each host
- *  LynxTerm can reach, while it runs; where detect said not installed, once a day instead.
- *  Toast for warning or critical: always on connect, only on change when scheduled. */
 export function startServiceChecks() {
   const toast = useToast();
   async function checkAndTell(h: SavedHost, only: (s: Service) => boolean, onChange: boolean) {
@@ -227,11 +193,10 @@ export function startServiceChecks() {
     (panes) => {
       for (const p of panes) {
         seen.add(p.session!);
-        const h = useHosts().hosts.value.find((x) => hostKey(x) === hostKey(p.target));
+        const h = savedHost(p.target);
         if (!h) continue;
         void (async () => {
           await checkAndTell(h, (s) => s.checkOnConnect, false);
-          // A connection is a cheap chance to fill in what was never checked here.
           await checkHost(h, (s) => {
             const r = health.value[h.id!]?.[s.id!];
             return !r || r.health === "unknown";
@@ -241,8 +206,8 @@ export function startServiceChecks() {
     },
   );
 
-  // Once a minute: services due on each host. ponytail: app-side timer, nothing runs while
-  // LynxTerm is closed; a cron job on the server if that matters.
+  // ponytail: app-side timer, nothing runs while LynxTerm is closed; a cron job on the server
+  // if that matters.
   setInterval(() => {
     for (const h of useHosts().hosts.value) {
       if (!reachable(h)) continue;

@@ -11,7 +11,6 @@ const sections = [
 ] as const;
 
 const { current, available, system, state } = useUpdates();
-// With update available, template shows links instead.
 const updateLine = computed(() => {
   if (state.value === "checking") return "Checking GitHub for a new release…";
   if (state.value === "done") return `You have the latest version for ${system.value}.`;
@@ -124,7 +123,6 @@ const updateLine = computed(() => {
             </div>
             <UButton
               label="Check now"
-              color="neutral"
               variant="outline"
               :loading="state === 'checking'"
               @click="checkForUpdate"

@@ -23,7 +23,6 @@ function record(hostKey: string, command: string) {
   const list = (byHost.get(hostKey) ?? []).filter((c) => c !== command);
   list.push(command);
   byHost.set(hostKey, list.slice(-500));
-  // Debounce vault saves per host.
   clearTimeout(saveTimers.get(hostKey));
   saveTimers.set(
     hostKey,
@@ -31,9 +30,7 @@ function record(hostKey: string, command: string) {
   );
 }
 
-/** Best first: host history (newest first), snippets, then server PATH commands (shortest
- *  first). */
-function suggest(hostKey: string, line: string, commands: string[], max = 6) {
+function suggest(hostKey: string, line: string, commands: string[]) {
   if (line.trim().length < 2) return [];
   const fits = (c: string) => c.startsWith(line) && c !== line;
   const history = (useSettings().history && byHost.get(hostKey)) || [];
@@ -42,10 +39,9 @@ function suggest(hostKey: string, line: string, commands: string[], max = 6) {
     .filter((c) => !c.includes("\n"));
   const path = line.includes(" ") ? [] : commands.filter(fits).sort((a, b) => a.length - b.length);
   const all = [...history.toReversed().filter(fits), ...snippets.filter(fits), ...path];
-  return [...new Set(all)].slice(0, max);
+  return [...new Set(all)].slice(0, 6);
 }
 
-/** One host's history, or all. Syncs to every device. */
 async function purge(hostKey?: string) {
   for (const key of hostKey ? [hostKey] : [...byHost.keys()]) {
     clearTimeout(saveTimers.get(key)); // pending save would restore it
@@ -54,7 +50,6 @@ async function purge(hostKey?: string) {
   await invoke("history_clear", { hostKey });
 }
 
-/** Hosts that ran this exact command (history keeps each command once per host). */
 const usedOn = (command: string) =>
   [...byHost.values()].filter((list) => list.includes(command.trimEnd())).length;
 

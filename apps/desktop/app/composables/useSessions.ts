@@ -1,13 +1,10 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { SessionState, SshTarget } from "~/components/SshTerminal.vue";
 
-// Open terminals, shared by tab strip (app.vue), terminal area (SessionsView) and host list.
-// Tab holds one pane, or two side by side after split.
 type Pane = { key: number; target: SshTarget; state: SessionState; session?: number };
 export type Tab = { key: number; panes: Pane[] };
 
 const tabs = ref<Tab[]>([]);
-/** null is Home. */
 const current = ref<number | null>(null);
 const focusedPane = ref<number | null>(null);
 let nextKey = 0;
@@ -17,7 +14,6 @@ const activePane = computed(
   () =>
     activeTab.value?.panes.find((p) => p.key === focusedPane.value) ?? activeTab.value?.panes[0],
 );
-/** Open terminal session to host; Details uses it instead of own. */
 const sessionFor = (h: { user: string; host: string; port: number }) =>
   tabs.value
     .flatMap((t) => t.panes)
@@ -57,14 +53,11 @@ function toggleSplit() {
 }
 
 const connect = (h: SavedHost) => start({ ...h, password: "" });
-/** New tab running `command` instead of a shell, titled `what` after host; its pane, to
- *  follow. */
 function runOn(h: SavedHost, command: string, what: string) {
   start({ ...h, name: `${hostName(h)}: ${what}`, password: "", command });
   return tabs.value.at(-1)!.panes[0]!;
 }
 
-// Tool panel beside terminals (SessionsView), one at a time.
 type Panel = "sftp" | "monitor" | "snippets" | "forwards";
 const panel = ref<Panel | null>(null);
 function openFiles(h: SavedHost) {

@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { expect, test } from "vite-plus/test";
 
-// Hooks SshTerminal types into each session, run by real interactive bash.
 const read = (name: string) =>
   readFileSync(new URL(`../src-tauri/src/${name}`, import.meta.url), "utf8");
 const hooks = read("shell-integration.sh") + read("shell-integration-session.sh");
@@ -28,7 +27,7 @@ test.skipIf(!hasBash).each(["", OLD_INSTALL])("bash reports status and folder %#
   const failed = after.indexOf("\x1b]133;D;1\x07");
   expect(failed).toBeGreaterThan(0);
   expect(after.indexOf("theme-saw=1")).toBeGreaterThan(0); // $? survives for prompt themes
-  expect(after.indexOf("/tmp\x07")).toBeGreaterThan(failed); // OSC 7 after cd
-  expect(after).not.toContain("\x1b]633;H"); // no H headers
+  expect(after.indexOf("/tmp\x07")).toBeGreaterThan(failed);
+  expect(after).not.toContain("\x1b]633;H");
   expect(after.match(/\x1b\]133;C\x07/g)?.length).toBe(4); // setup's last line, false, cd, exit
 });

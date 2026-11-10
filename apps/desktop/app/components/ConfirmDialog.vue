@@ -2,9 +2,7 @@
 export type Ask = {
   title: string;
   description?: string;
-  /** Mono line under description: fingerprint, path, command. */
   detail?: string;
-  /** Danger button label; default "Delete". */
   label?: string;
 };
 </script>
@@ -23,7 +21,7 @@ const emit = defineEmits<{ close: [ok: boolean] }>();
     </template>
     <template #footer>
       <form class="contents" @submit.prevent="emit('close', true)">
-        <UButton label="Cancel" color="neutral" variant="ghost" @click="emit('close', false)">
+        <UButton label="Cancel" variant="ghost" @click="emit('close', false)">
           <template #trailing><UKbd value="Esc" /></template>
         </UButton>
         <UButton type="submit" :label="ask.label ?? 'Delete'" color="error" autofocus>

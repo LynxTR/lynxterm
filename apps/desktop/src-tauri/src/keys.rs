@@ -28,7 +28,6 @@ struct StoredKey {
     /// Unix seconds; 0 for keys older than this field.
     #[serde(default)]
     created_at: u64,
-    /// "generated" or "imported".
     #[serde(default)]
     origin: String,
 }
@@ -92,7 +91,6 @@ pub fn keys_list(vault: State<'_, Vault>) -> Result<Vec<KeyMeta>, String> {
     })
 }
 
-/// Ed25519, created inside vault.
 #[tauri::command]
 pub fn key_generate(vault: State<'_, Vault>, name: String) -> Result<(), String> {
     let seed = Zeroizing::new(<[u8; 32]>::generate());
@@ -102,7 +100,7 @@ pub fn key_generate(vault: State<'_, Vault>, name: String) -> Result<(), String>
     vault.with(|v| v.put(&new_id(), KIND, &stored))
 }
 
-/// Private key to Downloads. Needs master password again.
+/// Needs master password again.
 #[tauri::command]
 pub async fn key_export(
     app: AppHandle,
@@ -134,8 +132,6 @@ pub async fn key_export(
     Ok(path.display().to_string())
 }
 
-/// Appends public key to host's ~/.ssh/authorized_keys. Signs in with host's current setup
-/// (its key, or `password`).
 #[tauri::command]
 pub async fn key_install(
     vault: State<'_, Vault>,
@@ -161,7 +157,6 @@ pub async fn key_install(
     Ok(())
 }
 
-/// Private keys in ~/.ssh: files with sibling `.pub`.
 #[tauri::command]
 pub fn keys_scan() -> BTreeSet<String> {
     let Ok(entries) = fs::read_dir(expand_home("~/.ssh")) else {
@@ -174,7 +169,6 @@ pub fn keys_scan() -> BTreeSet<String> {
         .collect()
 }
 
-/// `source`: file path or pasted OpenSSH / PEM / PuTTY key. Returns key id.
 #[tauri::command]
 pub fn key_import(
     vault: State<'_, Vault>,
@@ -193,7 +187,6 @@ pub fn key_import(
     let stored = to_stored(name, &key, "imported")?;
 
     vault.with(|v| {
-        // Same key reimported: update entry, no twin.
         let existing = v.list::<StoredKey>(KIND)?;
         let id = existing
             .into_iter()

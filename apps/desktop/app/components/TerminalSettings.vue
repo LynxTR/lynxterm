@@ -22,9 +22,7 @@ async function integrate(h: SavedHost, remove: boolean) {
   busy.value = h.id!;
   try {
     await invoke("shell_integration_host", { hostId: h.id, password: password.value, remove });
-    const key = hostKey(h);
-    settings.integratedHosts = settings.integratedHosts.filter((k) => k !== key);
-    if (!remove) settings.integratedHosts.push(key);
+    setIn("integratedHosts", hostKey(h), !remove);
     logActivity(h, {
       kind: "integration",
       title: remove ? "Removed shell integration" : "Installed shell integration",
@@ -52,7 +50,6 @@ async function integrate(h: SavedHost, remove: boolean) {
   }
 }
 
-// History keyed by user@host:port.
 const entries = computed(() =>
   [...history.byHost].map(([key, commands]) => {
     const saved = hosts.value.find((h) => hostKey(h) === key);
@@ -64,7 +61,6 @@ const entries = computed(() =>
 const total = computed(() => entries.value.reduce((n, e) => n + e.commands.length, 0));
 const open = ref("");
 
-/** "" = all hosts */
 async function purge(key: string, name = "") {
   const ok = await askConfirm({
     title: key ? `Purge history for ${name}?` : "Purge all command history?",
@@ -164,25 +160,19 @@ async function purge(key: string, name = "") {
               class="min-w-0 flex-1 sm:w-48"
             />
             <UButton
+              color="primary"
               type="submit"
               size="sm"
               :label="asking?.remove ? 'Remove' : 'Install'"
               :loading="busy === h.id"
             />
-            <UButton
-              label="Cancel"
-              size="sm"
-              color="neutral"
-              variant="ghost"
-              @click="asking = null"
-            />
+            <UButton label="Cancel" size="sm" variant="ghost" @click="asking = null" />
           </form>
           <template v-else-if="installed(h)">
             <UBadge label="Installed" color="success" variant="subtle" />
             <UButton
               label="Remove"
               size="sm"
-              color="neutral"
               variant="outline"
               :loading="busy === h.id"
               @click="integrate(h, true)"
@@ -193,7 +183,6 @@ async function purge(key: string, name = "") {
             label="Install"
             icon="i-ph-download-simple-duotone"
             size="sm"
-            color="neutral"
             variant="outline"
             :loading="busy === h.id"
             @click="integrate(h, false)"
@@ -229,7 +218,6 @@ async function purge(key: string, name = "") {
             <UButton
               :icon="open === e.key ? 'i-ph-caret-down' : 'i-ph-caret-right'"
               size="xs"
-              color="neutral"
               variant="ghost"
               :aria-label="`${open === e.key ? 'Hide' : 'Show'} history for ${e.name}`"
               :aria-expanded="open === e.key"

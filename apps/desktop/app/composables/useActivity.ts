@@ -1,6 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// Actions per host, kept in vault (activity.rs).
 export type Activity = {
   at: number; // unix seconds
   kind: "snippet" | "key" | "upload" | "download" | "monitoring" | "integration" | "service";
@@ -9,7 +8,6 @@ export type Activity = {
   ok?: boolean;
 };
 
-/** Bumped per log so open Details page reloads. */
 export const activityVersion = ref(0);
 
 /** Never throws: missed log line must not break action. */

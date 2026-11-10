@@ -1,6 +1,5 @@
 import type { Ref } from "vue";
 
-/** macOS draws own traffic lights over header; elsewhere app draws controls. */
 export const isMac = navigator.userAgent.includes("Mac");
 
 export async function copyText(text: string, title = "Copied", description?: string) {

@@ -93,9 +93,9 @@ test("sh errors from dash and bash", () => {
 test("sh colors: strings, variables, comments, keywords, escaped html", () => {
   const html = highlightSh('if [ -n "$1" ]; then echo $HOME <x # note\nfi');
   expect(html).toContain('<span class="text-violet-300">if</span>');
-  expect(html).toContain('<span class="text-emerald-300">"$1"</span>');
+  expect(html).toContain('<span class="text-emerald-300">&#34;$1&#34;</span>');
   expect(html).toContain('<span class="text-sky-300">$HOME</span>');
-  expect(html).toContain('<span class="text-muted">&lt;</span>x');
+  expect(html).toContain('<span class="text-muted">&#60;</span>x');
   expect(html).toContain('<span class="text-dimmed italic"># note</span>');
   expect(highlightSh("a#b")).toBe("a#b");
   expect(highlightSh("write_conf() {")).toContain('<span class="text-amber-200">write_conf</span>');

@@ -1,19 +1,15 @@
-//! Host groups. Hosts refer to group by name.
+//! Hosts refer to group by name.
 
 use serde::{Deserialize, Serialize};
 
 const KIND: &str = "group";
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Deserialize, Default)]
+#[serde(default)]
 pub struct Group {
-    #[serde(default)]
     id: String,
     name: String,
-    #[serde(default)]
     color: String,
-    /// Position among groups; ties sort by name.
-    #[serde(default)]
     order: i64,
 }
 

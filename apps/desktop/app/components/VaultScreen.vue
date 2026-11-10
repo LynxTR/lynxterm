@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 
+const link = { variant: "link", size: "xs", class: "px-0" } as const;
+
 const props = defineProps<{ status: "none" | "locked" }>();
 const emit = defineEmits<{ unlocked: [] }>();
 const onboarding = useOnboarding();
@@ -10,7 +12,6 @@ const screen = ref<Screen>(props.status === "none" ? "welcome" : "unlock");
 const step = computed(() =>
   screen.value === "welcome" ? 0 : ["create", "code"].includes(screen.value) ? 1 : undefined,
 );
-// Welcome screen has own heading.
 const HEADINGS: Partial<Record<Screen, [string, string]>> = {
   create: [
     "Create your vault",
@@ -49,7 +50,6 @@ const saved = ref(false);
 const busy = ref(false);
 const error = ref("");
 
-// Rough meter: length counts most, then character variety.
 const strength = computed(() => {
   const p = password.value;
   if (!p) return 0;
@@ -81,7 +81,6 @@ const create = () =>
     screen.value = "code";
   });
 
-// Vault open once code saved; sync and hosts next, in SetupScreen.
 function afterCode() {
   onboarding.start(password.value);
   password.value = confirm.value = recoveryCode.value = "";
@@ -101,7 +100,6 @@ const recover = () =>
   run(async () => {
     await invoke("vault_recover", { code: recoveryInput.value, newPassword: password.value });
     emit("unlocked");
-    // Worker signed out every other device; each asks for new password.
     if (await invoke("sync_url"))
       useToast().add({
         title: "Your other devices were signed out",
@@ -175,23 +173,17 @@ const points = [
         </li>
       </ul>
       <div class="flex flex-col gap-2.5 pt-1">
-        <UButton label="Get started" size="lg" block @click="go('create')" />
+        <UButton color="primary" label="Get started" size="lg" block @click="go('create')" />
         <div class="flex justify-between text-xs">
           <UButton
             label="Already have a vault? Join it from this device"
-            color="neutral"
-            variant="link"
-            size="xs"
-            class="px-0"
+            v-bind="link"
             @click="go('join')"
           />
           <UButton
             label="MIT licensed"
             trailing-icon="i-ph-arrow-up-right"
-            color="neutral"
-            variant="link"
-            size="xs"
-            class="px-0"
+            v-bind="link"
             @click="openExternal(WORKER_REPO.replace(/\/tree\/.*/, ''))"
           />
         </div>
@@ -223,24 +215,10 @@ const points = [
         <UInput v-model="confirm" type="password" required size="lg" class="w-full" />
       </UFormField>
       <UCheckbox v-model="rememberDevice" v-bind="remember" />
-      <UButton type="submit" label="Create vault" size="lg" block :loading="busy" />
+      <UButton color="primary" type="submit" label="Create vault" size="lg" block :loading="busy" />
       <div class="flex justify-between">
-        <UButton
-          label="Back"
-          color="neutral"
-          variant="link"
-          size="xs"
-          class="px-0"
-          @click="go('welcome')"
-        />
-        <UButton
-          label="Join an existing vault instead"
-          color="neutral"
-          variant="link"
-          size="xs"
-          class="px-0"
-          @click="go('join')"
-        />
+        <UButton label="Back" v-bind="link" @click="go('welcome')" />
+        <UButton label="Join an existing vault instead" v-bind="link" @click="go('join')" />
       </div>
     </form>
 
@@ -254,21 +232,21 @@ const points = [
           <UButton
             label="Copy"
             size="sm"
-            color="neutral"
             variant="outline"
             @click="copyText(recoveryCode, 'Recovery code copied')"
           />
-          <UButton
-            label="Save as file"
-            size="sm"
-            color="neutral"
-            variant="outline"
-            @click="saveCode"
-          />
+          <UButton label="Save as file" size="sm" variant="outline" @click="saveCode" />
         </div>
       </div>
       <UCheckbox v-model="saved" label="I stored this code somewhere that is not this machine." />
-      <UButton label="Continue" size="lg" block :disabled="!saved" @click="afterCode" />
+      <UButton
+        color="primary"
+        label="Continue"
+        size="lg"
+        block
+        :disabled="!saved"
+        @click="afterCode"
+      />
     </template>
 
     <form v-else-if="screen === 'join'" class="flex flex-col gap-5" @submit.prevent="join">
@@ -286,13 +264,11 @@ const points = [
         <UInput v-model="password" type="password" required size="lg" class="w-full" />
       </UFormField>
       <UCheckbox v-model="rememberDevice" v-bind="remember" />
-      <UButton type="submit" label="Join" size="lg" block :loading="busy" />
+      <UButton color="primary" type="submit" label="Join" size="lg" block :loading="busy" />
       <UButton
         label="Back"
-        color="neutral"
-        variant="link"
-        size="xs"
-        class="self-start px-0"
+        v-bind="link"
+        class="self-start"
         @click="go(props.status === 'none' ? 'welcome' : 'unlock')"
       />
     </form>
@@ -317,15 +293,8 @@ const points = [
           class="w-full"
         />
       </UFormField>
-      <UButton type="submit" label="Recover" size="lg" block :loading="busy" />
-      <UButton
-        label="Back"
-        color="neutral"
-        variant="link"
-        size="xs"
-        class="self-start px-0"
-        @click="go('unlock')"
-      />
+      <UButton color="primary" type="submit" label="Recover" size="lg" block :loading="busy" />
+      <UButton label="Back" v-bind="link" class="self-start" @click="go('unlock')" />
     </form>
 
     <form v-else class="flex flex-col gap-5" @submit.prevent="unlock">
@@ -333,13 +302,11 @@ const points = [
         <UInput v-model="password" type="password" required autofocus size="lg" class="w-full" />
       </UFormField>
       <UCheckbox v-model="rememberDevice" v-bind="remember" />
-      <UButton type="submit" label="Unlock" size="lg" block :loading="busy" />
+      <UButton color="primary" type="submit" label="Unlock" size="lg" block :loading="busy" />
       <UButton
         label="Forgot it? Use your recovery code"
-        color="neutral"
-        variant="link"
-        size="xs"
-        class="self-start px-0"
+        v-bind="link"
+        class="self-start"
         @click="go('recover')"
       />
     </form>

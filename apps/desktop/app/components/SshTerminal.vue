@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Terminal, type IMarker } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { useDebounceFn, useResizeObserver } from "@vueuse/core";
 import "@xterm/xterm/css/xterm.css";
 import { Channel, invoke } from "@tauri-apps/api/core";
@@ -15,7 +16,6 @@ export interface SshTarget {
   user: string;
   password: string;
   keyId: string;
-  /** Runs instead of a shell (service action); tab ends with it. */
   command?: string;
 }
 
@@ -24,14 +24,14 @@ export type SessionState = "connecting" | "open" | "closed";
 const props = defineProps<{ target: SshTarget; closable?: boolean }>();
 const emit = defineEmits<{
   state: [SessionState];
-  session: [number]; // Rust session id, for SFTP and snippets
+  session: [number];
   focus: [];
   close: [];
 }>();
 const el = useTemplateRef("el");
 const scroller = useTemplateRef("scroller");
 const error = ref("");
-const unknownHost = ref(""); // fingerprint awaiting user approval
+const unknownHost = ref("");
 const state = ref<SessionState>("connecting");
 const toast = useToast();
 
@@ -49,9 +49,8 @@ const term = new Terminal({
   // Own caret drawn; xterm's kept invisible for cell math.
   cursorStyle: "bar",
   cursorInactiveStyle: "none",
-  scrollback: 10_000, // current command only; rest are cards
-  allowProposedApi: true, // markers
-  // Base colors from app tokens; ANSI shared with cards (termHtml.ts).
+  scrollback: 10_000,
+  allowProposedApi: true,
   theme: {
     background: token("--ui-bg", "#0b0d10"),
     foreground: FOREGROUND,
@@ -72,38 +71,33 @@ useResizeObserver(
 );
 let id: number | undefined;
 
-// ── Suggestions ────────────────────────────────────────────────────────
 // With shell integration, shell marks command line start (OSC 133): read exact line from
 // screen. Without it, follow keystrokes; give up when shell edits line out of sight.
 const { record, suggest } = useHistory();
 const historyKey = hostKey(props.target);
-const commands = ref<string[]>([]); // server PATH, fetched once per session
+const commands = ref<string[]>([]);
 const integrated = ref(false);
 const cwd = ref("");
-// `list`: every completion for `line`; picked one drawn after cursor.
 const ghost = reactive({
   line: "",
   list: [] as Completion[],
   pick: 0,
-  open: true, // Esc closes menu until line changes
-  below: true, // menu under cursor, or above near bottom
+  open: true,
+  below: true,
   left: 0,
   top: 0,
 });
-/** Suggestion left after typed and pending keys. */
 const rest = computed(() => {
   const full = ghost.list[ghost.pick]?.text ?? "";
   const typed = ghost.line + pending.text;
   return full.startsWith(typed) ? full.slice(typed.length) : "";
 });
 const menu = computed(() => ghost.open && ghost.list.length > 1);
-// Word being completed: menu lines up under its first letter.
 const word = computed(() => ghost.line.slice(ghost.line.lastIndexOf(" ") + 1));
 let promptStart: { x: number; y: number } | null = null; // absolute cell after prompt
 let typed = "";
 let stale = false;
 
-/** Text from `start` to command line end, or only up to cursor. */
 function readLine(start: { x: number; y: number }, toCursor = false) {
   const b = term.buffer.active;
   const cursorY = b.baseY + b.cursorY;
@@ -140,7 +134,7 @@ term.parser.registerOscHandler(133, (data) => {
     fresh = false;
   } else if (data[0] === "B") promptStart = { x: b.cursorX, y: b.baseY + b.cursorY };
   else if (data[0] === "C") {
-    const command = promptStart ? readLine(promptStart) : ""; // exactly as run, edits included
+    const command = promptStart ? readLine(promptStart) : "";
     if (command) record(historyKey, command);
     // cursor on first output line
     Object.assign(l, { ran: true, command, start: Date.now(), out: mark() });
@@ -157,15 +151,10 @@ term.parser.registerOscHandler(133, (data) => {
 term.parser.registerOscHandler(7, (data) => {
   try {
     cwd.value = decodeURIComponent(new URL(data).pathname);
-  } catch {
-    // not a file:// URL
-  }
+  } catch {}
   return true;
 });
 
-// ── Command blocks ─────────────────────────────────────────────────────
-// Server untouched: hooks typed once at first prompt, hidden till they report. Each fresh
-// prompt freezes rows above into a card (termHtml.ts), clears terminal.
 interface Card {
   id: number;
   html: string[]; // wrapped rows rejoined: cards reflow
@@ -179,14 +168,14 @@ interface Card {
   cwd: string;
 }
 interface Live {
-  at?: IMarker; // prompt start
-  out?: IMarker; // first output line
+  at?: IMarker;
+  out?: IMarker;
   ran?: boolean;
   command?: string;
   start?: number;
   status?: number;
   ms?: number;
-  cleared?: boolean; // `clear` ran: no card
+  cleared?: boolean;
   branch: string;
   cwd: string;
 }
@@ -198,8 +187,8 @@ let fresh = true; // D seen since last A: shell drawing new prompt
 let nextCard = 0;
 const mark = () => markRaw(term.registerMarker(0));
 const scratch = term.buffer.normal.getNullCell();
-let gitBranch = ""; // latest OSC 633 P;Branch=
-const alternate = ref(false); // vim, htop…: full pane, cards hidden
+let gitBranch = "";
+const alternate = ref(false);
 term.buffer.onBufferChange((b) => {
   alternate.value = b.type === "alternate";
   measure();
@@ -219,7 +208,6 @@ term.parser.registerCsiHandler({ final: "J" }, (params) => {
   return false; // terminal still clears
 });
 
-/** Rows prompt to cursor become card; terminal keeps cursor row. */
 function freeze() {
   const b = term.buffer.normal;
   const l = live.value;
@@ -231,7 +219,7 @@ function freeze() {
     ...{ id: nextCard++, html: [], text: [], outAt: -1 },
     ...{ command, status, ms, start, branch, cwd: l.cwd },
   };
-  let extra = false; // text below prompt line
+  let extra = false;
   // Marker trimmed off scrollback: line -1, start at top.
   for (let y = Math.max(l.at?.line ?? 0, 0); y < cursor; y++) {
     const line = b.getLine(y)!;
@@ -255,7 +243,8 @@ function freeze() {
   term.clear();
 }
 
-const view = reactive({ y: 0, rowHeight: 0, cellWidth: 0, used: 0 });
+/** `gap`: cell minus glyph width; overlays and cards letter-space by it to stay on grid. */
+const view = reactive({ y: 0, rowHeight: 0, cellWidth: 0, gap: 0, used: 0 });
 function usedRows() {
   const b = term.buffer.active;
   if (plain || b.type === "alternate" || b.baseY > 0) return term.rows;
@@ -263,12 +252,23 @@ function usedRows() {
     if (b.getLine(y)?.translateToString(true)) return y + 1;
   return b.cursorY + 1;
 }
+// Cell size: screen box changes with it (resize, zoom, renderer swap). Observed, not read
+// on every write.
+const screen = shallowRef<HTMLElement | null>(null);
+let glyph = 0;
+useResizeObserver(screen, ([e]) => {
+  view.rowHeight = e!.contentRect.height / term.rows;
+  view.cellWidth = e!.contentRect.width / term.cols;
+  view.gap = view.cellWidth - glyph;
+});
+/** Overlay at cell x, y (buffer row): on terminal's grid. */
+const cellStyle = (x: number, y: number) => ({
+  left: `${x * view.cellWidth}px`,
+  top: `${(y - view.y) * view.rowHeight}px`,
+  lineHeight: `${view.rowHeight}px`,
+  letterSpacing: `${view.gap}px`,
+});
 function measure() {
-  const screen = el.value?.querySelector<HTMLElement>(".xterm-screen");
-  if (screen) {
-    view.rowHeight = screen.clientHeight / term.rows;
-    view.cellWidth = screen.clientWidth / term.cols;
-  }
   view.y = term.buffer.active.viewportY;
   view.used = usedRows();
 }
@@ -276,8 +276,7 @@ term.onScroll(measure);
 term.onResize(measure);
 term.onWriteParsed(measure); // xterm stops painting while scrolled out of view
 
-// Stick to bottom unless user scrolled up. Scroll anchoring off: it moved scroll as cards
-// settled, read as user scroll.
+// Scroll anchoring off: it moved scroll as cards settled, read as user scroll.
 let stick = true;
 const onScroll = () => {
   const s = scroller.value!;
@@ -295,7 +294,6 @@ const paneHeight = ref(0);
 const fitPane = () =>
   scroller.value && (paneHeight.value = scroller.value.clientHeight - (plain ? 24 : 62));
 useResizeObserver(scroller, fitPane);
-// Card click without selection: back to typing.
 const refocus = () => getSelection()?.toString() || term.focus();
 
 const clock = (ms: number) =>
@@ -317,14 +315,12 @@ const SETUP = (() => {
   // Only bash and zsh run it; other shells fail the test.
   return ` [ -n "$BASH_VERSION$ZSH_VERSION" ] && eval "$(printf %s '${btoa(script)}' | base64 -d)"\r`;
 })();
-// Command tabs have no shell to set up.
 let setup: "wait" | "hidden" | "done" =
   settings.terminalStyle !== "raw" && !props.target.command ? "wait" : "done";
 let timer: ReturnType<typeof setTimeout> | undefined;
-let held = ""; // output while hidden
-let typedAhead = ""; // keys pressed while hidden
+let held = "";
+let typedAhead = "";
 const decoder = new TextDecoder();
-/** Setup unsure prompt is up: user decides. */
 const offer = ref(false);
 
 function cursorKind() {
@@ -381,7 +377,6 @@ const revealIn = (ms: number) => {
 function receive(bytes: Uint8Array) {
   if (setup !== "hidden") {
     term.write(bytes);
-    // No setup (raw, user typed): show once output quiet.
     if (setup === "done") revealIn(400);
     // Wait for shell to go quiet: that is when it shows first prompt.
     if (setup === "wait") {
@@ -407,7 +402,7 @@ function echoed(text: string) {
 
 function track(data: string) {
   if (integrated.value) return;
-  if (term.buffer.active.type === "alternate") return void (stale = true); // vim, htop, less…
+  if (term.buffer.active.type === "alternate") return void (stale = true);
   const printable = [...data].every((c) => c >= " " && c !== "\x7f");
   if (data === "\r") {
     if (!stale && typed && echoed(typed)) record(historyKey, typed);
@@ -416,18 +411,18 @@ function track(data: string) {
   } else if (data === "\x7f" || data === "\b") {
     typed = typed.slice(0, -1);
   } else if (data === "\x03" || data === "\x15") {
-    typed = ""; // Ctrl-C, Ctrl-U: line starts over
+    typed = "";
     stale = false;
   } else if (printable) {
     typed += data;
   } else {
-    stale = true; // arrows, Tab, Ctrl-R…: shell changed line out of sight
+    stale = true;
   }
 }
 
 function currentLine(): string | null {
   const b = term.buffer.active;
-  if (b.type === "alternate" || b.viewportY !== b.baseY) return null; // full-screen app, or scrolled up
+  if (b.type === "alternate" || b.viewportY !== b.baseY) return null;
   if (!integrated.value) return stale ? null : typed;
   if (!promptStart) return null;
   const upToCursor = readLine(promptStart, true);
@@ -438,19 +433,18 @@ function currentLine(): string | null {
 function updateGhost() {
   const line = currentLine() ?? "";
   if (line !== ghost.line) Object.assign(ghost, { line, pick: 0, open: true });
-  // History and snippets first: what ran here beats what could run.
   const found = [
     ...suggest(historyKey, line, commands.value).map((text) => ({ text })),
     ...figComplete(line, updateGhost),
   ];
   ghost.list = found.filter((c, i) => found.findIndex((o) => o.text === c.text) === i).slice(0, 8);
-  const screen = el.value?.querySelector<HTMLElement>(".xterm-screen");
-  if (!ghost.list.length || !screen) return;
+  if (!ghost.list.length || !screen.value) return;
   const b = term.buffer.active;
   ghost.left = b.cursorX * view.cellWidth;
   ghost.top = b.cursorY * view.rowHeight;
   const box = scroller.value?.getBoundingClientRect();
-  ghost.below = !box || screen.getBoundingClientRect().top + ghost.top - box.top < box.height / 2;
+  ghost.below =
+    !box || screen.value.getBoundingClientRect().top + ghost.top - box.top < box.height / 2;
 }
 
 function accept(i = ghost.pick) {
@@ -462,8 +456,6 @@ function accept(i = ghost.pick) {
   term.focus();
 }
 
-// Editor-style selection on typed line (lineSelect.ts). Shell never sees these keys; any
-// other key drops selection.
 let anchor: number | null = null;
 let head = 0;
 const SELECT_KEYS = ["ArrowLeft", "ArrowRight", "Home", "End"];
@@ -486,7 +478,6 @@ function selectByKey(e: KeyboardEvent) {
   return true;
 }
 
-// Fish-style: Right arrow at line end accepts suggestion. Tab and Enter stay the shell's.
 term.attachCustomKeyEventHandler((e) => {
   const normal = term.buffer.active.type === "normal";
   // Paste via webview paste event (xterm takes it). Ctrl+V stays vim's in full-screen apps.
@@ -499,7 +490,6 @@ term.attachCustomKeyEventHandler((e) => {
     clearTimeout(timer);
     reveal();
   }
-  // Ctrl+Shift+C copies; Ctrl+C too with selection (Windows Terminal).
   if (e.ctrlKey && e.code === "KeyC" && (e.shiftKey || term.hasSelection())) {
     const text = term.getSelection() || getSelection()?.toString();
     if (text) copyText(text, "Copied");
@@ -512,7 +502,6 @@ term.attachCustomKeyEventHandler((e) => {
       return false;
     }
   } else if (!["Shift", "Control"].includes(e.key)) anchor = null;
-  // Text-field shortcuts as shell keys (shellKeys.ts).
   const shell = normal ? shellKey(e) : undefined;
   if (shell) {
     e.preventDefault();
@@ -546,7 +535,6 @@ function send(data: string) {
   invoke("ssh_write", { id, data });
 }
 
-// Slow link: typed text grey till echoed (localEcho.ts).
 const pending = reactive(echoState());
 const echo = localEcho(
   {
@@ -569,13 +557,10 @@ const echo = localEcho(
 const echoing = computed(echo.visible);
 const waiting = computed(echo.waiting);
 
-// ── Caret ──────────────────────────────────────────────────────────────
-// Glides, blinks when idle, sits after grey echo: one cursor, never two.
 const caret = reactive({ x: 0, y: 0, glide: false, idle: false, hidden: false, focused: false });
 let idleTimer: ReturnType<typeof setTimeout> | undefined;
 function placeCaret() {
   const b = term.buffer.active;
-  // Hidden echo (password, fast link): no move.
   const [x, y] = echoing.value
     ? [pending.x + pending.text.length, pending.y]
     : [b.cursorX, b.baseY + b.cursorY];
@@ -613,19 +598,16 @@ term.onResize(({ cols, rows }) => {
   if (id !== undefined) invoke("ssh_resize", { id, cols, rows });
 });
 
-// Password asked here; saving needs saved host.
 const { hosts, refresh: refreshHosts } = useHosts();
 const saved = computed(() => hosts.value.find((h) => hostKey(h) === historyKey));
 const password = ref(props.target.password);
 const remember = ref(true);
 const askPassword = ref(false);
 
-/** Connect card until first login. */
 const opened = ref(false);
 const gate = computed(
   () => !opened.value && (askPassword.value || !!unknownHost.value || !!error.value),
 );
-/** Card stays through shell start (`ready`). */
 const cover = computed(() => gate.value || !ready.value);
 
 async function open(trust?: string) {
@@ -654,7 +636,7 @@ async function open(trust?: string) {
     emit("session", id);
     invoke<string[]>("ssh_commands", { id })
       .then((list) => (commands.value = list))
-      .catch(() => {}); // suggestions skip PATH commands
+      .catch(() => {});
     term.focus();
   } catch (e) {
     const msg = String(e);
@@ -686,10 +668,29 @@ onMounted(async () => {
   ]);
   fitPane();
   await nextTick();
+  const ctx = document.createElement("canvas").getContext("2d")!;
+  ctx.font = `${term.options.fontSize}px ${term.options.fontFamily}`;
+  glyph = ctx.measureText("W").width;
   term.open(el.value!);
+  screen.value = el.value!.querySelector<HTMLElement>(".xterm-screen");
+  // GPU renderer; xterm's DOM one when WebGL missing or lost (too many tabs, driver reset).
+  // WebGL cells are whole device pixels rounded down (7.8px glyph: 7px, squeezed): letter
+  // spacing rounds up instead. ponytail: set once; window moved to other display scale may be
+  // a device pixel wide, re-set on resolution change if it shows.
+  try {
+    const gpu = new WebglAddon();
+    gpu.onContextLoss(() => {
+      gpu.dispose();
+      term.options.letterSpacing = 0;
+      fit.fit();
+    });
+    term.loadAddon(gpu);
+    const px = glyph * devicePixelRatio;
+    term.options.letterSpacing = Math.round(px) - Math.floor(px);
+  } catch {}
   term.textarea?.addEventListener("focus", () => ((caret.focused = true), emit("focus")));
   term.textarea?.addEventListener("blur", () => (caret.focused = false));
-  term.element?.addEventListener("mousedown", () => (anchor = null)); // mouse selects anew
+  term.element?.addEventListener("mousedown", () => (anchor = null));
   fit.fit();
   measure();
   connect();
@@ -732,6 +733,7 @@ onBeforeUnmount(() => {
               {{ unknownHost }}
             </code>
             <UButton
+              color="primary"
               label="Trust and connect"
               icon="i-ph-shield-check-duotone"
               class="self-end"
@@ -757,6 +759,7 @@ onBeforeUnmount(() => {
                 description="Encrypted in your vault, synced like keys."
               />
               <UButton
+                color="primary"
                 type="submit"
                 label="Connect"
                 icon="i-ph-terminal-duotone"
@@ -766,6 +769,7 @@ onBeforeUnmount(() => {
             </div>
           </form>
           <UButton
+            color="primary"
             v-else-if="error"
             label="Try again"
             icon="i-ph-arrow-clockwise"
@@ -788,17 +792,16 @@ onBeforeUnmount(() => {
         title="Turn on command blocks here?"
         description="Lynxterm couldn't spot a shell prompt, so it didn't type its setup line. Turn on only if a shell is waiting for a command."
         :actions="[
-          { label: 'Turn on', onClick: () => typeSetup('\x15') },
+          { label: 'Turn on', color: 'primary', onClick: () => typeSetup('\x15') },
           { label: 'Not now', color: 'neutral', variant: 'ghost', onClick: () => (offer = false) },
         ]"
       />
     </div>
-    <!-- --row: cards match terminal row height -->
     <div
       ref="scroller"
       class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3 [overflow-anchor:none]"
       :class="cover ? 'invisible' : 'animate-fade'"
-      :style="{ '--row': `${view.rowHeight || 24}px` }"
+      :style="{ '--row': `${view.rowHeight || 24}px`, '--gap': `${view.gap}px` }"
       @scroll="onScroll"
       @mouseup="refocus"
     >
@@ -848,7 +851,6 @@ onBeforeUnmount(() => {
             v-if="plain && closable"
             icon="i-ph-x"
             size="xs"
-            color="neutral"
             variant="ghost"
             aria-label="Close this pane"
             class="absolute top-0 right-0 z-30"
@@ -869,7 +871,6 @@ onBeforeUnmount(() => {
               v-if="closable"
               icon="i-ph-x"
               size="xs"
-              color="neutral"
               variant="ghost"
               aria-label="Close this pane"
               class="-my-1 ml-auto"
@@ -885,39 +886,25 @@ onBeforeUnmount(() => {
             <div class="absolute inset-x-0 top-0 h-full overflow-hidden">
               <div ref="el" :style="{ height: `${paneHeight}px` }" />
             </div>
-            <!-- pending echo, then suggestion -->
             <span
               v-if="echoing"
               aria-hidden="true"
               class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-muted"
-              :style="{
-                left: `${pending.x * view.cellWidth}px`,
-                top: `${(pending.y - view.y) * view.rowHeight}px`,
-                lineHeight: `${view.rowHeight}px`,
-              }"
+              :style="cellStyle(pending.x, pending.y)"
               >{{ pending.text }}</span
             >
             <span
               v-if="rest && !waiting && (echoing || !pending.text)"
               aria-hidden="true"
               class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-dimmed"
-              :style="{
-                left: `${caret.x * view.cellWidth}px`,
-                top: `${(caret.y - view.y) * view.rowHeight}px`,
-                lineHeight: `${view.rowHeight}px`,
-              }"
+              :style="cellStyle(caret.x, caret.y)"
               >{{ rest }}</span
             >
-            <!-- Enter sent, server not answered yet -->
             <span
               v-if="waiting"
               aria-hidden="true"
               class="lt-late pointer-events-none absolute flex items-center"
-              :style="{
-                left: `${(caret.x + 1) * view.cellWidth}px`,
-                top: `${(caret.y - view.y) * view.rowHeight}px`,
-                height: `${view.rowHeight}px`,
-              }"
+              :style="{ ...cellStyle(caret.x + 1, caret.y), height: `${view.rowHeight}px` }"
             >
               <UIcon name="i-ph-circle-notch" class="size-3 animate-spin text-dimmed" />
             </span>

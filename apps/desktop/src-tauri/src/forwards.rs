@@ -1,5 +1,3 @@
-//! Local forward, like `ssh -L`: 127.0.0.1:local_port to remote_host:remote_port via host.
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -27,7 +25,7 @@ pub struct Forward {
 
 crate::kind_commands!(forwards_list, forward_save(forward): Forward, KIND);
 
-/// Running tunnels by forward id. Aborting task closes listener.
+/// Aborting task closes listener.
 #[derive(Default)]
 pub struct Running(Mutex<HashMap<String, JoinHandle<()>>>);
 
@@ -80,7 +78,7 @@ pub async fn forward_start(
                     .channel_open_direct_tcpip(target.0, target.1, peer_ip, peer.port() as u32)
                     .await
                 else {
-                    return; // server refused this connection; tunnel stays up
+                    return;
                 };
                 let mut stream = channel.into_stream();
                 let _ = tokio::io::copy_bidirectional(&mut socket, &mut stream).await;

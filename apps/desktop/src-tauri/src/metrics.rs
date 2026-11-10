@@ -1,6 +1,3 @@
-//! Agentless server monitoring: cron keeps 7 days of per-minute samples in
-//! ~/.lynxterm/metrics on server; app reads it, plus live samples, over SSH.
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -11,8 +8,8 @@ use crate::ssh::{self, Handle, Sessions};
 use crate::vault::Vault;
 
 /// Prints one line: `unix_time cpu% mem_used_mb mem_total_mb disk% load1 cores rx_B/s tx_B/s`.
-/// CPU, network measured over 1 s, so each run takes about 1 s. Network: every interface
-/// except loopback. History saved before load and network has only first five fields.
+/// CPU, network measured over 1 s, so each run takes about 1 s. History saved before load
+/// and network has only first five fields.
 const SAMPLE: &str = r#"net() { awk 'NR>2 { split($0, p, ":"); if (p[1] ~ /^ *lo$/) next; split(p[2], f, " "); r+=f[1]; t+=f[9] } END { printf "%.0f %.0f", r, t }' /proc/net/dev; }
 a=$(head -1 /proc/stat); na=$(net); sleep 1; b=$(head -1 /proc/stat); nb=$(net)
 cpu=$(printf '%s\n%s\n' "$a" "$b" | awk '{i=$5+$6; t=0; for(k=2;k<=NF;k++) t+=$k} NR==1{pi=i; pt=t} NR==2{printf "%.0f", (t>pt ? 100*(1-(i-pi)/(t-pt)) : 0)}')
@@ -26,7 +23,6 @@ echo "$(date +%s) $cpu $mem $disk $load $cores $rate"
 
 const TAG: &str = "lynxterm-metrics";
 
-/// Prints `os <id>`: os-release ID (debian, ubuntu…), else kernel name.
 const OS: &str = ". /etc/os-release 2>/dev/null; echo \"os ${ID:-$(uname -s | tr A-Z a-z)}\"\n";
 
 fn install_script() -> String {
@@ -64,22 +60,10 @@ fn script(action: &str) -> Result<String, String> {
     })
 }
 
-/// Over open terminal session's connection.
-#[tauri::command]
-pub async fn metrics(
-    sessions: State<'_, Sessions>,
-    id: u32,
-    action: String,
-) -> Result<String, String> {
-    ssh::exec(&*sessions.handle(id)?, &script(&action)?).await
-}
-
-/// Background connections to saved hosts: monitoring without terminal open.
 #[derive(Default)]
 pub struct Watched(Mutex<HashMap<String, Arc<Handle>>>);
 
 impl Watched {
-    /// Saved host's background connection, opened once and kept for next call.
     pub async fn handle(&self, vault: &Vault, host_id: &str) -> Result<Arc<Handle>, String> {
         let open = self.0.lock().unwrap().get(host_id).cloned();
         if let Some(handle) = open.filter(|h| !h.is_closed()) {
@@ -93,26 +77,40 @@ impl Watched {
         Ok(handle)
     }
 
-    /// After a failed call: next one connects again.
+    pub async fn pick(
+        &self,
+        sessions: &Sessions,
+        vault: &Vault,
+        session: Option<u32>,
+        host_id: &str,
+    ) -> Result<Arc<Handle>, String> {
+        match session {
+            Some(id) => sessions.handle(id),
+            None => self.handle(vault, host_id).await,
+        }
+    }
+
     pub fn forget(&self, host_id: &str) {
         self.0.lock().unwrap().remove(host_id);
     }
 }
 
-/// Saved host over background connection, kept for next call. Key-based hosts only:
-/// passwords never stored.
 #[tauri::command]
-pub async fn metrics_host(
+pub async fn metrics(
+    sessions: State<'_, Sessions>,
     vault: State<'_, Vault>,
     watched: State<'_, Watched>,
+    session: Option<u32>,
     host_id: String,
     action: String,
 ) -> Result<String, String> {
     let script = script(&action)?;
-    let handle = watched.handle(&vault, &host_id).await?;
-    ssh::exec(&handle, &script)
-        .await
-        .inspect_err(|_| watched.forget(&host_id))
+    let handle = watched.pick(&sessions, &vault, session, &host_id).await?;
+    ssh::exec(&handle, &script).await.inspect_err(|_| {
+        if session.is_none() {
+            watched.forget(&host_id);
+        }
+    })
 }
 
 #[tauri::command]
@@ -126,27 +124,7 @@ pub async fn metrics_unwatch(watched: State<'_, Watched>, host_id: String) -> Re
 
 #[cfg(test)]
 mod tests {
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    fn sh(script: &str, home: &std::path::Path) -> String {
-        let mut child = Command::new("sh")
-            .arg("-s")
-            .env("HOME", home)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .spawn()
-            .unwrap();
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(script.as_bytes())
-            .unwrap();
-        let out = child.wait_with_output().unwrap();
-        assert!(out.status.success());
-        String::from_utf8(out.stdout).unwrap()
-    }
+    use crate::sh;
 
     fn assert_sample(line: &str) {
         let fields: Vec<f64> = line
@@ -166,10 +144,9 @@ mod tests {
     #[test]
     #[cfg(target_os = "linux")]
     fn sample_prints_nine_numbers() {
-        assert_sample(sh(super::SAMPLE, &std::env::temp_dir()).trim());
+        assert_sample(sh(&std::env::temp_dir(), super::SAMPLE).trim());
     }
 
-    // Installed script body, without cron.
     #[test]
     #[cfg(target_os = "linux")]
     fn installed_script_appends_a_sample() {
@@ -178,7 +155,7 @@ mod tests {
         let script = super::install_script();
         let body = script.split("'LYNXTERM_EOF'\n").nth(1).unwrap();
         let body = body.split("LYNXTERM_EOF\n").next().unwrap();
-        sh(body, &home);
+        sh(&home, body);
         let saved = std::fs::read_to_string(home.join(".lynxterm/metrics")).unwrap();
         assert_sample(saved.trim());
         std::fs::remove_dir_all(home).unwrap();

@@ -28,7 +28,7 @@ watch(status, async (s) => {
   sync.start();
 });
 
-const { tabs, current, closeTab, closeAll } = useSessions();
+const { tabs, current, closeTab, closeAll, activePane, connect, runSnippet } = useSessions();
 const tabDot = (t: Tab) =>
   t.panes.some((p) => p.state === "open")
     ? "bg-success"
@@ -82,7 +82,6 @@ const nav = computed(
       { id: "settings", label: "Settings", icon: "i-ph-gear-duotone" },
     ] as const,
 );
-// Trusting a host in a terminal adds to known_hosts: refresh on open.
 watch(view, (v) => v === "known" && refreshKnownHosts());
 
 const navItems = computed(() =>
@@ -96,13 +95,10 @@ const navItems = computed(() =>
   })),
 );
 
-// Ctrl+K palette. Inside terminal Ctrl+K is the shell's, so there Ctrl+Shift+K.
+// Inside terminal Ctrl+K is the shell's, so there Ctrl+Shift+K.
 const paletteOpen = ref(false);
 const term = ref("");
-const { activePane, connect, runSnippet } = useSessions();
-// Typed user@host connects without saving.
 const quickTarget = computed(() => parseTarget(term.value));
-// Open tabs: palette's "Open sessions" and tab strip's All tabs menu.
 const tabItems = computed(() =>
   tabs.value.map((t) => ({
     label: hostName(t.panes[0]!.target),
@@ -165,7 +161,6 @@ const paletteGroups = computed(() => [
   },
 ]);
 
-// Fade strip's right edge only while more tabs hide past it.
 const tabScroller = useTemplateRef<HTMLElement>("tabScroller");
 const { arrivedState, measure } = useScroll(tabScroller);
 useResizeObserver(tabScroller, measure);
@@ -351,7 +346,6 @@ const syncDot = computed(
                   <UButton
                     icon="i-ph-x"
                     size="xs"
-                    color="neutral"
                     variant="ghost"
                     aria-label="Close tab"
                     class="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
@@ -365,7 +359,6 @@ const syncDot = computed(
               <UButton
                 icon="i-ph-caret-down"
                 size="xs"
-                color="neutral"
                 variant="ghost"
                 aria-label="All tabs"
                 title="All tabs"
@@ -376,7 +369,6 @@ const syncDot = computed(
               <UButton
                 icon="i-ph-plus"
                 size="xs"
-                color="neutral"
                 variant="ghost"
                 aria-label="Quick connect"
                 class="self-center"
@@ -408,7 +400,6 @@ const syncDot = computed(
               :max-size="300"
               :collapsed-size="64"
               :ui="{
-                // drag-resize follows mouse, no transition
                 root: 'flex min-h-0 border-e border-default bg-default transition-[width] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)] data-[dragging=true]:transition-none',
                 header: 'h-auto px-3 pt-3 pb-2',
                 body: 'gap-1 px-3 py-0',
@@ -471,7 +462,6 @@ const syncDot = computed(
                       <UButton
                         icon="i-ph-lock-duotone"
                         :label="collapsed ? undefined : 'Lock vault'"
-                        color="neutral"
                         variant="ghost"
                         :square="collapsed"
                         class="h-10 min-w-0 flex-1 font-normal text-muted"

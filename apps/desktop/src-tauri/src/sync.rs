@@ -7,8 +7,8 @@ use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use data_encoding::BASE64;
+use serde::Deserialize;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
 use serde_json::json;
 use tauri::{AppHandle, State};
 
@@ -124,7 +124,6 @@ async fn prelogin(url: &str) -> Result<Prelogin, String> {
     call(HTTP.get(format!("{url}/v1/prelogin"))).await
 }
 
-/// (device token, Worker header, wrap key).
 async fn login(
     url: &str,
     password: &str,
@@ -164,7 +163,6 @@ pub async fn sync_now(vault: State<'_, Vault>, send: Option<Vec<String>>) -> Res
     sync(&vault, send.as_deref()).await
 }
 
-/// Kinds with unpushed changes. No request.
 #[tauri::command]
 pub fn sync_pending(vault: State<'_, Vault>) -> Result<BTreeSet<String>, String> {
     Ok(vault
@@ -224,24 +222,14 @@ pub fn sync_url(vault: State<'_, Vault>) -> Result<Option<String>, String> {
     vault.with(|v| Ok(v.sync_target()?.map(|(url, ..)| url)))
 }
 
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Status {
-    /// Sign-ins, not unique devices: rejoin counts twice.
-    devices: u32,
-    /// False once Worker sets `NEW_DEVICES = off`.
-    new_devices: bool,
-}
-
 #[tauri::command]
-pub async fn sync_status(vault: State<'_, Vault>) -> Result<Status, String> {
+pub async fn sync_status(vault: State<'_, Vault>) -> Result<serde_json::Value, String> {
     let Some((url, token, _)) = vault.with(|v| v.sync_target())? else {
         return Err("Sync is not set up".into());
     };
     call(HTTP.get(format!("{url}/v1/status")).bearer_auth(&token)).await
 }
 
-/// Empty Worker: enrols this vault. Else signs in.
 #[tauri::command]
 pub async fn sync_connect(
     vault: State<'_, Vault>,
@@ -277,7 +265,6 @@ async fn connect(
     sync(vault, None).await.map(|_| ())
 }
 
-/// Worker must already hold this vault. (device token, header).
 async fn sign_in(
     vault: &Vault,
     url: &str,
@@ -414,14 +401,12 @@ mod tests {
             assert_eq!(hosts, ["from B"]);
             assert!(a.with(|v| Ok(v.dirty())).unwrap().is_empty());
 
-            // History not due stays local; next full sync sends it.
             b.with(|v| v.put("c1", "history", &"ls")).unwrap();
             sync(&b, Some(&["host".into()])).await.unwrap();
             assert_eq!(b.with(|v| Ok(v.dirty())).unwrap().len(), 1);
             sync(&b, None).await.unwrap();
             assert!(b.with(|v| Ok(v.dirty())).unwrap().is_empty());
 
-            // Second enrolment refused; wrong password can't join.
             assert!(
                 connect(&a, &url, "local-test-token", "wrong password!!")
                     .await
@@ -433,7 +418,6 @@ mod tests {
                     .is_err()
             );
 
-            // Recovery on A changes password, signs B out until B signs in with new one.
             let new_password = "brand new password";
             let (open, auth) = vault::recover(tmp("a"), &code, new_password).unwrap();
             let (url_a, token_a, _) = open.sync_target().unwrap().unwrap();

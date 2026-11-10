@@ -4,10 +4,11 @@ import { watchDebounced } from "@vueuse/core";
 
 const { services, available, save, remove } = useServices();
 
-const { filter, shown } = useFilter(
-  () => services.value,
+const { filter, shown: matching } = useFilter(
+  () => available.value,
   (s) => `${s.name} ${s.description}`,
 );
+const shown = computed(() => matching.value.filter((s) => !isBuiltIn(s)));
 const { draft, submit } = useDraft(services, save, "Service saved");
 /** A built-in opens as a new draft: saving makes an own copy, never changes the built-in. */
 const pick = (s: Service) =>
@@ -21,13 +22,7 @@ const EVERY = [
   { label: "1 day", value: 1440 },
 ];
 const everyLabel = (n: number) => EVERY.find((e) => e.value === n)?.label ?? `${n} minutes`;
-/** Built-ins not shadowed by an own service, matching the filter. */
-const builtIn = computed(() => {
-  const q = filter.value.trim().toLowerCase();
-  return available.value.filter(
-    (s) => isBuiltIn(s) && `${s.name} ${s.description}`.toLowerCase().includes(q),
-  );
-});
+const builtIn = computed(() => matching.value.filter(isBuiltIn));
 
 function duplicate() {
   const s = structuredClone(toRaw(draft.value!));
@@ -47,9 +42,7 @@ async function forget() {
 }
 
 const SHARED_EXAMPLE = 'PKGS="docker-ce docker-ce-cli containerd.io"';
-/** Lines in file; empty part is still one. */
 const count = (text: string | undefined) => (text ?? "").split("\n").length;
-/** Textarea height: empty one shows example. */
 const rows = (body: string | undefined, example: string) => count(body || example);
 const numbers = (from: number, n: number) => Array.from({ length: n }, (_, i) => from + i);
 
@@ -77,8 +70,6 @@ async function add(f: ServiceFunction) {
 }
 const drop = (f: ServiceFunction) => delete draft.value!.functions[f];
 
-// Raw: whole file in one textarea. Stays on across services; parts saved, so leaving raw
-// (or saving) splits file back, and stays raw with error if it doesn't split.
 const rawMode = ref(false);
 const raw = ref("");
 const splitError = ref<{ line: number; error: string } | null>(null);
@@ -103,7 +94,6 @@ async function onSubmit() {
   if (!rawMode.value || applyRaw()) await submit();
 }
 
-/** File as sh gets it. */
 const script = computed(
   () => draft.value && (rawMode.value ? raw.value : serviceFile(draft.value)),
 );
@@ -128,7 +118,6 @@ watchDebounced(
 const problem = computed(() => splitError.value ?? syntax.value);
 const warned = computed(() => new Set(warnings.value.map((w) => w.line)));
 const fixable = computed(() => warnings.value.filter((w) => w.fixed !== undefined).length);
-/** Fixed file into raw text, or split back into parts. */
 function setScript(text: string) {
   if (rawMode.value) return void (raw.value = text);
   const parts = parseServiceFile(text);
@@ -149,7 +138,13 @@ const mark = (n: number) =>
       :empty="!shown.length && !builtIn.length"
     >
       <template #actions>
-        <UButton icon="i-ph-plus" label="New service" size="sm" @click="draft = newService()" />
+        <UButton
+          color="primary"
+          icon="i-ph-plus"
+          label="New service"
+          size="sm"
+          @click="draft = newService()"
+        />
       </template>
       <ListRow
         v-for="s in shown"
@@ -193,20 +188,8 @@ const mark = (n: number) =>
         <h2 class="t-heading">{{ draft.name || "New service" }}</h2>
         <UBadge v-if="!draft.id" label="not saved yet" class="font-mono" />
         <div v-if="draft.id" class="ml-auto flex flex-wrap gap-2">
-          <UButton
-            icon="i-ph-copy-duotone"
-            label="Duplicate"
-            color="neutral"
-            variant="ghost"
-            @click="duplicate"
-          />
-          <UButton
-            icon="i-ph-trash-duotone"
-            label="Delete"
-            color="neutral"
-            variant="ghost"
-            @click="forget"
-          />
+          <UButton icon="i-ph-copy-duotone" label="Duplicate" variant="ghost" @click="duplicate" />
+          <UButton icon="i-ph-trash-duotone" label="Delete" variant="ghost" @click="forget" />
         </div>
       </div>
 
@@ -256,14 +239,12 @@ const mark = (n: number) =>
             <UFieldGroup size="xs" class="ml-auto">
               <UButton
                 label="Functions"
-                color="neutral"
                 :variant="rawMode ? 'outline' : 'soft'"
                 :aria-pressed="!rawMode"
                 @click="setRaw(false)"
               />
               <UButton
                 label="Raw file"
-                color="neutral"
                 :variant="rawMode ? 'soft' : 'outline'"
                 :aria-pressed="rawMode"
                 @click="setRaw(true)"
@@ -325,7 +306,6 @@ const mark = (n: number) =>
                     icon="i-ph-x"
                     size="xs"
                     square
-                    color="neutral"
                     variant="ghost"
                     :aria-label="`Remove ${f.name}`"
                     @click="drop(f.name)"
@@ -423,7 +403,6 @@ const mark = (n: number) =>
                 :label="`Fix ${fixable}`"
                 icon="i-ph-magic-wand-duotone"
                 size="xs"
-                color="neutral"
                 variant="outline"
                 class="ml-auto"
                 @click="setScript(fixServiceFile(script!))"
@@ -442,7 +421,6 @@ const mark = (n: number) =>
                 v-if="w.fixed !== undefined"
                 label="Fix"
                 size="xs"
-                color="neutral"
                 variant="ghost"
                 class="ml-auto"
                 :title="w.fixed.trim()"
@@ -452,7 +430,7 @@ const mark = (n: number) =>
           </div>
         </div>
 
-        <UButton type="submit" label="Save" class="self-end" />
+        <UButton color="primary" type="submit" label="Save" class="self-end" />
       </form>
 
       <p class="hint">

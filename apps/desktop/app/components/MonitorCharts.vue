@@ -1,19 +1,16 @@
 <script setup lang="ts">
-// Live and saved metrics for one server. Flat list in session Monitor panel; `wide`: tiles in
-// host detail on Hosts page. Live part is host's shared stream (useLiveMetrics).
 const props = defineProps<{
   target: { user: string; host: string; port: number };
   wide?: boolean;
 }>();
 const log = (entry: Omit<Activity, "at">) => logActivity(props.target, entry);
 const toast = useToast();
-const settings = useSettings();
 
 useLiveMetrics(() => [props.target]);
 const stream = computed(() => liveOf(props.target));
 
 const history = shallowRef<Sample[]>([]); // server's saved samples, oldest first
-const keeping = ref<boolean>(); // server cron job installed? undefined while loading
+const keeping = ref<boolean>();
 const historyError = ref("");
 const busy = ref(false);
 const error = computed(() => stream.value?.error || historyError.value);
@@ -39,11 +36,7 @@ watch(
 );
 
 // Unticking remembered per server so default setup leaves it off; ticking again clears that.
-const optOut = (on: boolean) => {
-  const key = hostKey(props.target);
-  const rest = settings.noHistoryHosts.filter((k) => k !== key);
-  settings.noHistoryHosts = on ? [...rest, key] : rest;
-};
+const optOut = (on: boolean) => setIn("noHistoryHosts", hostKey(props.target), on);
 
 async function install() {
   optOut(false);
@@ -135,7 +128,6 @@ const slotted = (value: (s: Sample) => number | undefined) =>
   bridge(buckets(samples.value, value, from.value, to.value, slots.value), gap.value);
 const series = computed(() => charts.map((c) => slotted(c.value)));
 
-// Step line, flat per slot (single slot still shows), broken on gaps.
 function runs(values: (number | null)[], max: number) {
   const all: { from: number; to: number; d: string }[] = [];
   values.forEach((v, i) => {
@@ -156,8 +148,6 @@ const area = (values: (number | null)[], max = 100) =>
     .map((r) => `M${r.from} 100L${r.d}L${r.to} 100Z`)
     .join("");
 
-// Network: two lines in Mb/s, scaled to busiest slot. At least 1 Mb/s so idle link stays near
-// floor instead of filling chart.
 const rx = computed(() => slotted((s) => (s.rx !== undefined ? mbps(s.rx) : undefined)));
 const tx = computed(() => slotted((s) => (s.tx !== undefined ? mbps(s.tx) : undefined)));
 const netMax = computed(() =>
@@ -174,7 +164,6 @@ const netReadout = computed(() => {
   return s?.rx !== undefined ? `rx ${rate(s.rx)}, tx ${rate(s.tx ?? 0)}` : "–";
 });
 
-// Hover moves one crosshair across all charts, shows that slot's values.
 const hover = ref<number | null>(null);
 function onMove(e: MouseEvent) {
   const box = (e.currentTarget as Element).getBoundingClientRect();
@@ -200,7 +189,6 @@ function readout(i: number) {
   return latest.value ? charts[i]!.now(latest.value) : "–";
 }
 
-// Charts drawn: lines (first one filled), scale, readout.
 const shown = computed(() => [
   ...charts.map((c, i) => ({
     ...c,
@@ -243,20 +231,13 @@ const shown = computed(() => [
           v-for="r in ranges"
           :key="r.label"
           :label="r.label"
-          color="neutral"
           :variant="range === r ? 'soft' : 'outline'"
           :aria-pressed="range === r"
           @click="range = r"
         />
       </UFieldGroup>
       <UDropdownMenu :items="moreMenu" :content="{ align: 'end' }">
-        <UButton
-          icon="i-ph-dots-three"
-          size="xs"
-          color="neutral"
-          variant="ghost"
-          aria-label="Monitoring options"
-        />
+        <UButton icon="i-ph-dots-three" size="xs" variant="ghost" aria-label="Monitoring options" />
       </UDropdownMenu>
     </div>
     <div v-if="error" class="flex flex-col gap-1 pt-3 text-sm" :class="!wide && 'px-3.5'">
@@ -265,7 +246,6 @@ const shown = computed(() => [
       <span class="text-muted">Retrying every few seconds.</span>
     </div>
 
-    <!-- nothing to chart from server that never answered -->
     <div
       v-if="!error || samples.length"
       class="min-h-0 flex-1"

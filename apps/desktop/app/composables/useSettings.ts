@@ -3,31 +3,22 @@ import { useLocalStorage } from "@vueuse/core";
 // Per-device preferences in local storage, not vault: not secret, may differ per machine.
 const defaults = {
   maskAddresses: false,
-  /** Check GitHub for newer release at start and twice a day (useUpdates). */
   checkUpdates: true,
   history: true,
   localEcho: true,
   /** raw: plain, no hooks typed */
   terminalStyle: "blocks" as "blocks" | "plain" | "raw",
-  /** Minutes between each sync section's turns (SYNC_SECTIONS). */
   syncEvery: { hosts: 5, snippets: 60, services: 60, history: 1440, activity: 60 } as Record<
     string,
     number
   >,
-  /** Saved host ids user stopped watching (isWatched). */
   unwatchedHosts: [] as string[],
-  /** user@host:port where user turned 7-day history off. Every other watched server gets it
-   *  set up once (ensureHistory). */
   noHistoryHosts: [] as string[],
-  /** user@host:port where shell integration was installed or seen working. */
   integratedHosts: [] as string[],
-  /** Alert rules (useAlerts), overrides by host id. `notify`: what alert does besides marking
-   *  host card and logging activity. */
   monitoring: {
     rules: structuredClone(DEFAULT_RULES),
     overrides: {} as Record<string, Partial<Record<Metric, Rule>>>,
     notify: true,
-    /** Minutes; 0 means until tomorrow morning. */
     snooze: 60,
   },
 };
@@ -52,16 +43,21 @@ const settings = useLocalStorage("lynxterm:settings", defaults, {
 
 export const useSettings = () => settings;
 
-/** Watched: SSH login kept open for live readings. Default for key hosts; password hosts can't
+/** Default for key hosts; password hosts can't
  *  log in in background, so report only from a terminal. */
 export const isWatched = (h: { id?: string; keyId?: string }) =>
   !!h.keyId && !settings.unwatchedHosts.includes(h.id!);
-export function setWatched(h: { id?: string }, on: boolean) {
-  const rest = settings.unwatchedHosts.filter((id) => id !== h.id);
-  settings.unwatchedHosts = on ? rest : [...rest, h.id!];
+export const setWatched = (h: { id?: string }, on: boolean) => setIn("unwatchedHosts", h.id!, !on);
+
+export function setIn(
+  key: "unwatchedHosts" | "noHistoryHosts" | "integratedHosts",
+  item: string,
+  present: boolean,
+) {
+  const rest = settings[key].filter((x) => x !== item);
+  settings[key] = present ? [...rest, item] : rest;
 }
 
-/** maskAddresses on: 10.0.4.12 becomes 10.•.•.12, bastion.example.net becomes bastion.•.net. */
 export function maskHost(host: string) {
   // Loopback reveals nothing; hiding it makes tunnels harder to read.
   if (!settings.maskAddresses || /^(127\.|::1$|localhost$)/.test(host)) return host;

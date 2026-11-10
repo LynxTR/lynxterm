@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 const KIND: &str = "snippet";
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Snippet {
     #[serde(default)]
     id: String,

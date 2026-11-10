@@ -1,7 +1,6 @@
 <script setup lang="ts">
 const { newDevices, newDevicesOpen: open, devices, host, refreshStatus } = useSync();
 
-// "lynxterm-vault" from lynxterm-vault.you.workers.dev; "" on custom domain.
 const worker = computed(() =>
   host.value.endsWith(".workers.dev") ? host.value.split(".")[0] : "",
 );
@@ -52,10 +51,11 @@ watch(open, (o) => o && refreshStatus());
       </div>
     </template>
     <template #footer>
-      <UButton v-if="newDevices === false" label="Done" @click="open = false" />
+      <UButton color="primary" v-if="newDevices === false" label="Done" @click="open = false" />
       <template v-else>
-        <UButton label="Not now" color="neutral" variant="ghost" @click="open = false" />
+        <UButton label="Not now" variant="ghost" @click="open = false" />
         <UButton
+          color="primary"
           label="Open Cloudflare"
           trailing-icon="i-ph-arrow-square-out"
           @click="openExternal(CLOUDFLARE)"

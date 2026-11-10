@@ -20,7 +20,6 @@ export function useForwards() {
     ]);
     forwards.value.sort((a, b) => a.localPort - b.localPort);
   };
-  /** Resolves to id; new one for new forward. */
   const save = (forward: Forward) =>
     invoke<string>("forward_save", { forward }).then((id) => refresh().then(() => id));
   const remove = (id: string) => invoke("forward_delete", { id }).then(refresh);

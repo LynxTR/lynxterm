@@ -9,7 +9,7 @@ interface SshKey {
   createdAt: number; // unix seconds, 0 if unknown
   origin: "generated" | "imported" | "";
   rev: number; // server revision; 0 = never synced
-  dirty: boolean; // changed since last sync
+  dirty: boolean;
 }
 
 const keys = ref<SshKey[]>([]);

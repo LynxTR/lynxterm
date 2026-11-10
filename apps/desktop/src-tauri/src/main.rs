@@ -17,7 +17,6 @@ mod ssh;
 mod sync;
 mod vault;
 
-/// For `.map_err(err)`: commands return errors to frontend as text.
 pub fn err(e: impl std::fmt::Display) -> String {
     e.to_string()
 }
@@ -31,6 +30,29 @@ pub fn write_private(path: &std::path::Path, bytes: &[u8]) -> Result<(), String>
     std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
     let mut file = options.open(path).map_err(err)?;
     file.write_all(bytes).map_err(err)
+}
+
+#[cfg(test)]
+pub fn sh(home: &std::path::Path, script: &str) -> String {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let mut child = Command::new("sh")
+        .arg("-s")
+        .env("HOME", home)
+        .env("SHELL", "/bin/bash")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(script.as_bytes())
+        .unwrap();
+    let out = child.wait_with_output().unwrap();
+    assert!(out.status.success());
+    String::from_utf8(out.stdout).unwrap()
 }
 
 fn main() {
@@ -102,7 +124,6 @@ fn main() {
             activity::activity_list,
             activity::activity_log,
             metrics::metrics,
-            metrics::metrics_host,
             metrics::metrics_unwatch
         ])
         .run(tauri::generate_context!())

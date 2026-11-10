@@ -26,9 +26,7 @@ async function erase() {
   // Settings and layout live in webview storage, outside vault.
   try {
     localStorage.clear();
-  } catch {
-    // storage blocked: nothing to clear
-  }
+  } catch {}
   // Restart ends sessions and tunnels opened with old vault.
   await invoke("app_restart").catch(() => location.reload());
 }
@@ -66,7 +64,7 @@ async function erase() {
       </form>
     </template>
     <template #footer>
-      <UButton label="Cancel" color="neutral" variant="ghost" @click="open = false" />
+      <UButton label="Cancel" variant="ghost" @click="open = false" />
       <UButton
         type="submit"
         form="erase-form"

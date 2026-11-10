@@ -34,6 +34,7 @@ const ranOn = (s: Snippet) => `ran on ${runCount(s)} ${runCount(s) === 1 ? "host
     >
       <template #actions>
         <UButton
+          color="primary"
           icon="i-ph-plus"
           label="New snippet"
           size="sm"
@@ -68,24 +69,16 @@ const ranOn = (s: Snippet) => `ran on ${runCount(s)} ${runCount(s) === 1 ? "host
           <UButton
             icon="i-ph-copy-duotone"
             label="Copy command"
-            color="neutral"
             variant="outline"
             @click="copyText(draft.command, 'Command copied')"
           />
           <UButton
             icon="i-ph-copy-duotone"
             label="Duplicate"
-            color="neutral"
             variant="ghost"
             @click="draft = { name: `${draft.name} copy`, command: draft.command }"
           />
-          <UButton
-            icon="i-ph-trash-duotone"
-            label="Delete"
-            color="neutral"
-            variant="ghost"
-            @click="forget"
-          />
+          <UButton icon="i-ph-trash-duotone" label="Delete" variant="ghost" @click="forget" />
         </div>
       </div>
 
@@ -103,7 +96,7 @@ const ranOn = (s: Snippet) => `ran on ${runCount(s)} ${runCount(s) === 1 ? "host
             :ui="{ base: 'font-mono text-xs' }"
           />
         </UFormField>
-        <UButton type="submit" label="Save" class="self-end" />
+        <UButton color="primary" type="submit" label="Save" class="self-end" />
       </form>
 
       <p class="hint">

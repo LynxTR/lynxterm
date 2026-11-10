@@ -30,7 +30,6 @@ const editorOpen = computed({
   get: () => editingId.value !== null,
   set: (open) => {
     if (open) return;
-    // Drop override with no custom rule left.
     if (editingId.value && !Object.keys(m.overrides[editingId.value] ?? {}).length)
       delete m.overrides[editingId.value];
     editingId.value = null;
@@ -104,7 +103,6 @@ async function setNotify(on: boolean) {
           <UButton
             :label="showAll ? 'Show fewer' : `Show all ${hosts.length}`"
             size="xs"
-            color="neutral"
             variant="link"
             @click="showAll = !showAll"
           />
@@ -158,14 +156,8 @@ async function setNotify(on: boolean) {
           <span class="flex min-w-0 flex-1 flex-wrap gap-1.5">
             <UBadge v-for="c in overrideChips(h)" :key="c" :label="c" size="sm" class="font-mono" />
           </span>
-          <UButton label="Edit" size="xs" color="neutral" variant="ghost" @click="edit(h.id!)" />
-          <UButton
-            label="Remove"
-            size="xs"
-            color="neutral"
-            variant="ghost"
-            @click="removeOverride(h.id!)"
-          />
+          <UButton label="Edit" size="xs" variant="ghost" @click="edit(h.id!)" />
+          <UButton label="Remove" size="xs" variant="ghost" @click="removeOverride(h.id!)" />
         </li>
       </ul>
       <p v-else class="text-sm text-muted">
@@ -223,7 +215,7 @@ async function setNotify(on: boolean) {
         </div>
       </template>
       <template #footer>
-        <UButton label="Done" @click="editorOpen = false" />
+        <UButton color="primary" label="Done" @click="editorOpen = false" />
       </template>
     </UModal>
   </div>

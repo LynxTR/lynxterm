@@ -1,5 +1,3 @@
-// Watched hosts only. Rule fires when value stays at or above `above` for `for` minutes; clears
-// after a minute below `clear`, so no flapping. Unreachable fires after `for` minutes silent.
 export type Metric = "cpu" | "memory" | "disk" | "load" | "network" | "unreachable";
 const SAMPLED = ["cpu", "memory", "disk", "load", "network"] as const;
 export type Rule = { on: boolean; above: number; for: number; clear: number };
@@ -22,9 +20,8 @@ export const DEFAULT_RULES: Record<Metric, Rule> = {
   unreachable: { on: true, above: 0, for: 2, clear: 0 },
 };
 
-const CLEAR_AFTER = 60; // seconds below clear line before alert ends
+const CLEAR_AFTER = 60;
 
-/** Host's override, else default. */
 export function ruleFor(hostId: string | undefined, metric: Metric): Rule {
   const m = useSettings().monitoring;
   return (hostId && m.overrides[hostId]?.[metric]) || m.rules[metric];
@@ -45,15 +42,12 @@ function fmt(metric: Metric, v: number | string) {
 type Alert = { metric: Metric; label: string; value: string };
 
 type Track = { since?: number; belowSince?: number; active: boolean; value: string };
-/** By `hostKey|metric`. */
 const tracks = reactive(new Map<string, Track>());
-/** Last handled sample time, by hostKey. */
 const handled = new Map<string, number>();
-/** Snoozed until (ms), by hostKey. */
 const snoozed = reactive(new Map<string, number>());
 
 /** undefined when server didn't report it (load and network on samples from before they were
- *  collected). Network: busier direction. */
+ *  collected). */
 function valueOf(metric: (typeof SAMPLED)[number], s: Sample) {
   if (metric === "cpu") return s.cpu;
   if (metric === "memory") return memPct(s);
@@ -130,7 +124,6 @@ export function startAlerts() {
     tracks.set(key, t);
   }
 
-  // Each live host's new samples, oldest first.
   watch(
     () => hosts.value.map((h) => liveOf(h)?.samples.at(-1)?.t),
     () => {

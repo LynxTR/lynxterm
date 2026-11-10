@@ -1,7 +1,4 @@
 <script setup lang="ts">
-// Edits defaults (Settings › Monitoring) or a host's override. With `inherit`, rows without
-// "custom" ticked follow defaults, greyed out.
-
 const rules = defineModel<Partial<Record<Metric, Rule>>>({ required: true });
 const props = defineProps<{ inherit?: Record<Metric, Rule> }>();
 

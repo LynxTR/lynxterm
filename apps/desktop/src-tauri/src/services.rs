@@ -36,32 +36,19 @@ const BUILTIN: [(&str, &str); 6] = [
     ("rust", include_str!("../../../../services/rust.sh")),
 ];
 
-/// Shell file split in parts: shared code, then one body per function (detect, check...).
 /// Kept apart so editor locks function lines; assembled into a file when run.
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[derive(Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Service {
-    #[serde(default)]
     id: String,
     name: String,
-    #[serde(default)]
     description: String,
-    #[serde(default)]
     check_on_connect: bool,
     /// Minutes between checks while app runs; 0 off.
-    #[serde(default)]
     check_every: u32,
-    /// Variables and helpers above functions.
-    #[serde(default)]
     shared: String,
-    /// Function name to body.
-    #[serde(default)]
     functions: BTreeMap<String, String>,
-    /// Alert text when check fails.
-    #[serde(default)]
     why: String,
-    /// Button label for fix.
-    #[serde(default)]
     fix_label: String,
 }
 
@@ -127,10 +114,8 @@ fn script_for(vault: &Vault, id: &str) -> Result<(String, String), String> {
     Ok((file(&service), id.to_owned()))
 }
 
-/// Remote command for a terminal tab (ssh_open `command`) running one function that needs a
-/// terminal (install, fix, logs: sudo, following output). Writes the file to
-/// ~/.lynxterm/services/<id>.sh, then runs it. Built here, so only known functions and ids get
-/// in; `sh -c '...'` reads the same in every login shell, fish too.
+/// Built here, so only known functions and ids get in; `sh -c '...'` reads the same in every
+/// login shell, fish too.
 #[tauri::command]
 pub fn service_command(
     vault: State<'_, Vault>,
@@ -158,9 +143,7 @@ pub struct Ran {
     output: String,
 }
 
-/// One background function of a service (own or built-in) on a host: over open terminal
-/// `session` if given, else host's background connection. Script built here, never taken from
-/// frontend. `auth` (publickey, password) reaches script as LYNXTERM_AUTH.
+/// Script built here, never taken from frontend.
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
 pub async fn service_run(
@@ -179,10 +162,7 @@ pub async fn service_run(
     auth_ok(&auth)?;
     let (text, _) = script_for(&vault, &service_id)?;
     let script = format!("export LYNXTERM_AUTH={auth}\nset -- {function}\n{text}\n");
-    let handle = match session {
-        Some(id) => sessions.handle(id)?,
-        None => watched.handle(&vault, &host_id).await?,
-    };
+    let handle = watched.pick(&sessions, &vault, session, &host_id).await?;
     let ran = tokio::time::timeout(Duration::from_secs(20), ssh::exec_status(&handle, &script))
         .await
         .map_err(|_| format!("{function} took over 20 seconds"))?;

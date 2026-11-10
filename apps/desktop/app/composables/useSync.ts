@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useLocalStorage } from "@vueuse/core";
 
-/** Each section on own schedule. Groups and port forwards point at hosts, so travel with them. */
+/** Groups and port forwards point at hosts, so travel with them. */
 export const SYNC_SECTIONS = [
   {
     id: "hosts",
@@ -23,7 +23,6 @@ type Section = (typeof SYNC_SECTIONS)[number];
 
 const MINUTE = 60_000;
 const url = ref<string | null>(null);
-/** Item kinds this device keeps to itself: sections turned off. */
 const skipped = ref<string[]>([]);
 const lastSync = ref<number | null>(null);
 const error = ref("");
@@ -33,22 +32,27 @@ const SIGNED_OUT = "Signed out: the master password was changed on another devic
 const signedOut = ref(false);
 const busy = ref(false);
 const now = ref(Date.now());
-/** Sign-ins on Worker so far. */
+/** Sign-ins on Worker so far, not unique devices: rejoin counts twice. */
 const devices = ref(0);
 /** Worker still takes new devices (no NEW_DEVICES = off); null until known. */
 const newDevices = ref<boolean | null>(null);
 const newDevicesOpen = ref(false);
 let timer: ReturnType<typeof setInterval> | undefined;
 
-// Each section's next turn. Kept across restarts so daily means daily.
+// Kept across restarts so daily means daily.
 const nextAt = useLocalStorage<Partial<Record<Section["id"], number>>>("lynxterm:syncNext", {});
 
 const isOff = (s: Section) => s.kinds.every((k) => skipped.value.includes(k));
-// Sections added later: hourly until picked.
+export const SYNC_EVERY = [
+  { label: "Every 5 minutes", value: 5 },
+  { label: "Every 15 minutes", value: 15 },
+  { label: "Every hour", value: 60 },
+  { label: "Daily", value: 1440 },
+  { label: "Weekly", value: 10080 },
+];
 const every = (s: Section) => (useSettings().syncEvery as Record<string, number>)[s.id] ?? 60;
 const isDue = (s: Section) => !isOff(s) && Date.now() >= (nextAt.value[s.id] ?? 0);
 
-// Ask Worker for changes only while app in use: focused, key press or click in last 15 minutes.
 const IDLE_AFTER = 15 * 60_000;
 let lastInput = Date.now();
 const markActive = () => (lastInput = Date.now());
@@ -56,7 +60,6 @@ addEventListener("keydown", markActive, { capture: true, passive: true });
 addEventListener("pointerdown", markActive, { capture: true, passive: true });
 const active = () => document.hasFocus() && Date.now() - lastInput < IDLE_AFTER;
 
-/** Reloads every synced list from vault. */
 const reload = () =>
   Promise.all([
     useKeys().refresh(),
@@ -117,7 +120,9 @@ async function remindNewDevices() {
     description: "Then turn off new devices, so nobody else can sign in to your Worker.",
     icon: "i-ph-shield-check-duotone",
     duration: 30_000,
-    actions: [{ label: "Show me how", onClick: () => (newDevicesOpen.value = true) }],
+    actions: [
+      { label: "Show me how", color: "primary", onClick: () => (newDevicesOpen.value = true) },
+    ],
   });
 }
 
@@ -131,11 +136,10 @@ async function connect(form: { url: string; enrollToken: string; password: strin
   if (!error.value) remindNewDevices();
 }
 
-/** After another device changed master password: sign in with new one. */
 const signIn = (password: string) =>
   run(() => invoke("sync_sign_in", { password }).then(() => true));
 
-/** Keeps `kinds` on this device. Turning one back on pulls what it missed. */
+/** Turning one back on pulls what it missed. */
 async function setSkipped(kinds: string[]) {
   const added = skipped.value.some((k) => !kinds.includes(k));
   await invoke("sync_skip", { kinds });
@@ -143,7 +147,6 @@ async function setSkipped(kinds: string[]) {
   if (added) await syncNow();
 }
 
-/** Minutes between section's turns; 0 turns it off. */
 async function setEvery(s: Section, minutes: number) {
   if (minutes) {
     useSettings().syncEvery[s.id] = minutes;
@@ -155,7 +158,6 @@ async function setEvery(s: Section, minutes: number) {
 }
 
 const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-/** "in 4 minutes", "3 hours ago", "yesterday": `ms` from now, negative for past. */
 export function fromNow(ms: number) {
   const minutes = Math.round(ms / MINUTE);
   if (Math.abs(minutes) < 60) return relative.format(minutes, "minute");
@@ -168,8 +170,6 @@ function nextIn(s: Section) {
   return ms <= 0 ? "now" : fromNow(Math.max(ms, MINUTE));
 }
 
-// Asks Worker only when a section is due. Idle or in background, goes out only to send
-// changes; finding those is local.
 async function tick() {
   now.value = Date.now();
   if (!url.value || busy.value || signedOut.value) return;

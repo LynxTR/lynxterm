@@ -23,7 +23,6 @@ enum Input {
     Resize(u32, u32),
 }
 
-/// Input sender plus connection, kept so SFTP can open more channels on it.
 type Session = (UnboundedSender<Input>, Arc<Handle>);
 
 #[derive(Default)]
@@ -163,7 +162,6 @@ pub async fn connect_saved(
     Ok((h, session))
 }
 
-/// Returns combined output; non-zero exit is error.
 pub async fn exec(session: &Handle, script: &str) -> Result<String, String> {
     let (status, output) = exec_status(session, script).await?;
     if status != 0 {
@@ -175,8 +173,7 @@ pub async fn exec(session: &Handle, script: &str) -> Result<String, String> {
     Ok(output)
 }
 
-/// Exit status and combined output. Script goes to `sh` on stdin, so it works whatever the
-/// login shell (even fish).
+/// Script goes to `sh` on stdin, so it works whatever the login shell (even fish).
 pub async fn exec_status(session: &Handle, script: &str) -> Result<(u32, String), String> {
     let mut channel = session.channel_open_session().await.map_err(describe)?;
     channel.exec(true, "sh -s").await.map_err(describe)?;
@@ -219,7 +216,6 @@ pub async fn ssh_open(
         .request_pty(false, "xterm-256color", cols, rows, 0, 0, &[])
         .await
         .map_err(describe)?;
-    // Command (service action): runs instead of shell; tab ends when it does.
     match command {
         Some(c) => channel.exec(false, c).await.map_err(describe)?,
         None => channel.request_shell(false).await.map_err(describe)?,

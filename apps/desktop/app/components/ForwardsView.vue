@@ -3,9 +3,6 @@ const { forwards, running, save, remove, start, stop } = useForwards();
 const { hosts } = useHosts();
 
 const hostOf = (f: Forward) => hosts.value.find((h) => h.id === f.hostId);
-const hostItems = computed(() =>
-  hosts.value.map((h) => ({ label: hostName(h), description: hostLabel(h), value: h.id! })),
-);
 const title = (f: Forward) => f.name || `Port ${f.localPort}`;
 const route = (f: Forward) =>
   `localhost:${f.localPort} -> ${maskHost(f.remoteHost)}:${f.remotePort}`;
@@ -17,7 +14,6 @@ const { filter, shown } = useFilter(
 const { draft, submit } = useDraft(forwards, save, "Forward saved");
 const isRunning = computed(() => !!draft.value?.id && running.value.includes(draft.value.id));
 const draftHost = computed(() => (draft.value ? hostOf(draft.value) : undefined));
-/** Per tunnel end: label, address, protocol of hop into it. */
 const path = computed(() => [
   ["This machine", `localhost:${draft.value?.localPort}`, ""],
   ["Through", draftHost.value ? hostLabel(draftHost.value) : "No host", "ssh"],
@@ -80,6 +76,7 @@ async function forget() {
     >
       <template #actions>
         <UButton
+          color="primary"
           icon="i-ph-plus"
           label="New"
           aria-label="New forward"
@@ -136,7 +133,7 @@ async function forget() {
             :disabled="!draftHost"
             @click="toggle"
           />
-          <UButton label="Delete" color="neutral" variant="ghost" @click="forget" />
+          <UButton label="Delete" variant="ghost" @click="forget" />
         </div>
       </div>
 
@@ -196,7 +193,7 @@ async function forget() {
         </div>
         <div class="flex items-center gap-3">
           <span class="text-xs text-dimmed">Edits apply on the next start.</span>
-          <UButton type="submit" label="Save" class="ml-auto" />
+          <UButton color="primary" type="submit" label="Save" class="ml-auto" />
         </div>
       </form>
     </main>
@@ -210,7 +207,13 @@ async function forget() {
         </form>
       </template>
       <template #footer>
-        <UButton type="submit" form="forward-password" label="Start" icon="i-ph-play-duotone" />
+        <UButton
+          color="primary"
+          type="submit"
+          form="forward-password"
+          label="Start"
+          icon="i-ph-play-duotone"
+        />
       </template>
     </UModal>
   </div>

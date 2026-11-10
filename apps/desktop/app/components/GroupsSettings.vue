@@ -135,14 +135,8 @@ async function forgetTag(t: { name: string; hosts: number }) {
                 @click="draft.color = c.hex"
               />
             </div>
-            <UButton type="submit" label="Save" size="sm" />
-            <UButton
-              label="Cancel"
-              size="sm"
-              color="neutral"
-              variant="ghost"
-              @click="editing = ''"
-            />
+            <UButton color="primary" type="submit" label="Save" size="sm" />
+            <UButton label="Cancel" size="sm" variant="ghost" @click="editing = ''" />
           </form>
           <template v-else>
             <button
@@ -153,14 +147,8 @@ async function forgetTag(t: { name: string; hosts: number }) {
             />
             <span class="min-w-0 flex-1 truncate font-medium">{{ g }}</span>
             <UBadge :label="`hosts ${count(g)}`" size="sm" class="font-mono" />
-            <UButton
-              label="Rename"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              @click="startEdit(g)"
-            />
-            <UButton label="Delete" size="xs" color="neutral" variant="ghost" @click="forget(g)" />
+            <UButton label="Rename" size="xs" variant="ghost" @click="startEdit(g)" />
+            <UButton label="Delete" size="xs" variant="ghost" @click="forget(g)" />
           </template>
         </li>
         <li class="px-3 py-2">
@@ -174,7 +162,7 @@ async function forgetTag(t: { name: string; hosts: number }) {
               size="sm"
               class="min-w-0 flex-1"
             />
-            <UButton type="submit" label="Add group" size="sm" color="neutral" variant="outline" />
+            <UButton type="submit" label="Add group" size="sm" variant="outline" />
           </form>
         </li>
       </ul>
@@ -214,14 +202,8 @@ async function forgetTag(t: { name: string; hosts: number }) {
               class="min-w-0 flex-1"
               :ui="{ base: 'font-mono' }"
             />
-            <UButton type="submit" label="Save" size="sm" />
-            <UButton
-              label="Cancel"
-              size="sm"
-              color="neutral"
-              variant="ghost"
-              @click="renamingTag = ''"
-            />
+            <UButton color="primary" type="submit" label="Save" size="sm" />
+            <UButton label="Cancel" size="sm" variant="ghost" @click="renamingTag = ''" />
           </form>
           <template v-else>
             <span class="min-w-0 flex-1 truncate font-mono text-xs">{{ t.name }}</span>
@@ -229,17 +211,10 @@ async function forgetTag(t: { name: string; hosts: number }) {
             <UButton
               label="Rename"
               size="xs"
-              color="neutral"
               variant="ghost"
               @click="((renamingTag = t.name), (tagDraft = t.name))"
             />
-            <UButton
-              label="Delete"
-              size="xs"
-              color="neutral"
-              variant="ghost"
-              @click="forgetTag(t)"
-            />
+            <UButton label="Delete" size="xs" variant="ghost" @click="forgetTag(t)" />
           </template>
         </li>
       </ul>

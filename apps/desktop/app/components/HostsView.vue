@@ -7,7 +7,6 @@ const settings = useSettings();
 const toast = useToast();
 const view = useView();
 
-// Key hosts watched unless turned off: stream while app open, even without terminal.
 useLiveMetrics(() => hosts.value.filter(isWatched));
 const lastOf = (h: SavedHost) => liveOf(h)?.samples.at(-1);
 const unreachable = (h: SavedHost) => !lastOf(h) && !!liveOf(h)?.error;
@@ -31,7 +30,7 @@ const { filter, shown: byText } = useFilter(
   () => hosts.value,
   (h) => [h.name, h.host, h.user, h.group, ...(h.tags ?? [])].join("\n"),
 );
-const group = ref<string | null>(null); // null = all
+const group = ref<string | null>(null);
 const rank = (h: SavedHost) => (h.group ? groups.value.indexOf(h.group) : groups.value.length);
 const shown = computed(() =>
   byText.value
@@ -43,7 +42,6 @@ const shown = computed(() =>
         hostName(a).localeCompare(hostName(b)),
     ),
 );
-// Up to four group chips; past that, three plus menu.
 const present = computed(() =>
   groups.value
     .map((name) => ({ name, count: byText.value.filter((h) => h.group === name).length }))
@@ -90,7 +88,6 @@ const keyChoice = computed({
   get: () => editing.value?.keyId || "none",
   set: (v: string) => editing.value && (editing.value.keyId = v === "none" ? "" : v),
 });
-// One field "deploy@10.0.4.20", stored as user and host.
 const address = computed({
   get: () =>
     editing.value?.user
@@ -104,12 +101,10 @@ const address = computed({
   },
 });
 const groupItems = computed(() => [...new Set(groups.value)].sort());
-// "Create …": saved right away (with color), so list picks it up.
 function addGroup(name: string) {
   if (editing.value) editing.value.group = name;
   ensureGroup(name);
 }
-// Normalized as typed.
 const editingTags = computed({
   get: () => editing.value?.tags ?? [],
   set: (v: string[]) =>
@@ -141,7 +136,7 @@ async function saveHost() {
     return;
   }
   await save(h);
-  const saved = hosts.value.find((x) => hostKey(x) === hostKey(h));
+  const saved = savedHost(h);
   if (saved && isNew.value && !watchNew.value) setWatched(saved, false);
   if (saved) selected.value = saved.id!;
   editing.value = null;
@@ -168,7 +163,6 @@ async function copySsh(h: SavedHost) {
   await copyText(command, "Copied", command);
 }
 
-/** Shared by ••• menu and right-click. */
 const hostMenu = (h: SavedHost) => [
   [
     { label: "Connect", icon: "i-ph-terminal-window-duotone", onSelect: () => connect(h) },
@@ -222,7 +216,7 @@ const hostMenu = (h: SavedHost) => [
       :empty="!hosts.length && !isNew"
     >
       <template #actions>
-        <UButton icon="i-ph-plus" label="New host" size="sm" @click="newHost" />
+        <UButton color="primary" icon="i-ph-plus" label="New host" size="sm" @click="newHost" />
       </template>
       <template #kbd><UKbd value="/" /></template>
       <template v-if="present.length" #filters>
@@ -294,13 +288,7 @@ const hostMenu = (h: SavedHost) => [
         <h2 class="t-heading truncate">
           {{ isNew ? "New host" : `Edit ${hostName(editing)}` }}
         </h2>
-        <UButton
-          label="Cancel"
-          color="neutral"
-          variant="ghost"
-          class="ml-auto"
-          @click="editing = null"
-        />
+        <UButton label="Cancel" variant="ghost" class="ml-auto" @click="editing = null" />
       </div>
       <form class="flex flex-col gap-4 card p-4" @submit.prevent="saveHost">
         <div class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3.5">
@@ -365,12 +353,11 @@ const hostMenu = (h: SavedHost) => [
         <div class="flex flex-wrap justify-end gap-2 border-t border-default pt-3.5">
           <UButton
             label="Connect without saving"
-            color="neutral"
             variant="ghost"
             :disabled="!editing.host || !editing.user"
             @click="connectFromEditor"
           />
-          <UButton type="submit" label="Save" />
+          <UButton color="primary" type="submit" label="Save" />
         </div>
       </form>
     </main>

@@ -1,7 +1,6 @@
-// Service as one sh file and back. Editor line numbers match this file, so sh errors point
-// at right line.
+// Editor line numbers match this file, so sh errors point at right line.
+import { escapeHtml } from "./termHtml";
 
-/** File order. Only detect required. Hint: where it runs, what LynxTerm reads back. */
 export const SERVICE_FUNCTIONS = [
   {
     name: "detect",
@@ -51,12 +50,9 @@ export interface Service {
   name: string;
   description: string;
   checkOnConnect: boolean;
-  /** Minutes between checks while LynxTerm runs; 0 off. */
   checkEvery: number;
-  /** Variables and helpers above functions. */
   shared: string;
   functions: Partial<Record<ServiceFunction, string>>;
-  /** Alert text when check fails. */
   why: string;
   fixLabel: string;
 }
@@ -91,11 +87,10 @@ export function serviceFile(s: Code) {
   return lines.join("\n");
 }
 
-/** Heredoc end marker a line opens (`<<EOF`, `<<-'EOF'`), else empty. */
 const heredocStart = (line: string) =>
   line.includes("<<<") ? "" : (line.match(/<<-?\s*['"]?(\w+)/)?.[1] ?? "");
 
-/** File back to parts. Function runs from `name() {` to first `}` at line start, heredoc text
+/** Function runs from `name() {` to first `}` at line start, heredoc text
  *  skipped (a JSON `}` there is not the end). */
 export function parseServiceFile(text: string): Code | { error: string; line: number } {
   const lines = text.split("\n");
@@ -128,8 +123,6 @@ export function parseServiceFile(text: string): Code | { error: string; line: nu
   return { shared: shared.join("\n"), functions };
 }
 
-/** File with `# name:` style lines in shared code (as in /services) to a new service, those
- *  lines moved into fields. */
 export function serviceFromFile(text: string): Service | { error: string; line: number } {
   const parts = parseServiceFile(text);
   if ("error" in parts) return parts;
@@ -195,12 +188,9 @@ const RULES: Rule[] = [
 interface LintWarning {
   line: number;
   error: string;
-  /** Line after quick fix, when there is a safe one. */
   fixed?: string;
 }
 
-/** Warnings sh -n misses: bash-only syntax, exit inside a function, trailing spaces.
- *  Comments (but for trailing space) and heredoc text skipped. */
 export function lintServiceFile(text: string) {
   const found: LintWarning[] = [];
   let inFunction = false;
@@ -247,7 +237,6 @@ export function shError(message: string) {
   return m ? { line: Number(m[1]), error: m[2]! } : { line: 0, error: message };
 }
 
-// Editor colors, one class per kind of sh token.
 const SH_COLORS = [
   "text-dimmed italic", // comment
   "text-emerald-300", // string
@@ -260,9 +249,7 @@ const SH_COLORS = [
 // Groups in SH_COLORS order.
 const SH_TOKEN =
   /(#.*)|('[^']*'?|"(?:\\.|[^"\\])*"?)|(\$\{[^}]*\}?|\$\(\(?|\$(?:\w+|[?#@*!$-])?)|\b(if|then|else|elif|fi|for|while|until|do|done|case|esac|in|return|local|export|function)\b|([A-Za-z_]\w*)(?=\s*\(\))|\b(\d+)\b|(&&|\|\||[|;&<>]+)/g;
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
-/** sh code as HTML with colored spans: editor's layer under the textarea. */
 export function highlightSh(code: string) {
   const re = new RegExp(SH_TOKEN);
   let html = "";
@@ -274,8 +261,8 @@ export function highlightSh(code: string) {
       continue;
     }
     const color = SH_COLORS[m.slice(1).findIndex(Boolean)];
-    html += `${esc(code.slice(last, m.index))}<span class="${color}">${esc(m[0])}</span>`;
+    html += `${escapeHtml(code.slice(last, m.index))}<span class="${color}">${escapeHtml(m[0])}</span>`;
     last = re.lastIndex;
   }
-  return html + esc(code.slice(last));
+  return html + escapeHtml(code.slice(last));
 }

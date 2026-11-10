@@ -14,7 +14,6 @@ const settings = useSettings();
 const stream = computed(() => liveOf(props.host));
 const alerts = computed(() => alertsFor(props.host));
 const open = computed(() => sessionFor(props.host) !== undefined);
-// Monitoring card: charts while streaming (watched or terminal open), else why not.
 const monitoring = computed(() => {
   if (open.value || isWatched(props.host)) return "charts";
   return props.host.keyId ? "off" : "password";
@@ -74,10 +73,7 @@ async function revealPassword() {
 
 const keyName = computed(() => keys.value.find((k) => k.id === props.host.keyId)?.name);
 /** ~/.ssh/known_hosts line under host's name; none if names hashed. */
-const hostKeyLine = computed(() => {
-  const names = [props.host.host, `[${props.host.host}]:${props.host.port}`];
-  return knownHosts.value.find((k) => k.hosts.split(",").some((n) => names.includes(n)));
-});
+const hostKeyLine = computed(() => knownHosts.value.find((k) => knows(k, props.host)));
 
 const rules = computed(() =>
   METRICS.map((m) => ({
@@ -92,7 +88,6 @@ const custom = computed(
 const { available } = useServices();
 const { results, busy: checking } = useServiceHealth(() => props.host.id);
 const checkNow = () => checkHost(props.host);
-/** Rows: own services always, built-ins once seen installed. The rest wait under Install. */
 const installed = (s: Service) => {
   const r = results.value[s.id!];
   return !!r && r.health !== "missing" && r.health !== "unknown";
@@ -112,8 +107,7 @@ const installMenu = computed(() => [
       onSelect: () => runAction(props.host, s, "install"),
     })),
 ]);
-// Detect on open: whatever was never checked here, so buttons show without Check now. Keyed
-// on ids: a saved copy replacing a built-in of the same name is a new id, same length.
+// Keyed on ids: a saved copy replacing a built-in of the same name is a new id, same length.
 watch(
   () => [props.host.id, available.value.map((s) => s.id).join()],
   () => {
@@ -122,8 +116,6 @@ watch(
   },
   { immediate: true },
 );
-/** Row buttons, from its last check and the functions the service has. Each runs in a new
- *  terminal tab. */
 function actionsFor(s: Service) {
   const r = results.value[s.id!];
   const has = (f: ServiceFunction) => s.functions[f] !== undefined;
@@ -197,7 +189,6 @@ function when(at: number) {
   <main class="pane max-w-[860px]">
     <header class="flex flex-wrap items-center gap-3.5">
       <HostLogo :os="host.os" />
-      <!-- basis: buttons wrap below before name squeezes -->
       <div class="min-w-0 grow basis-56">
         <div class="flex flex-wrap items-center gap-2">
           <h2 class="t-heading truncate">{{ hostName(host) }}</h2>
@@ -207,11 +198,15 @@ function when(at: number) {
         <p class="truncate font-mono text-xs text-muted">{{ hostLabel(host) }}</p>
       </div>
       <div class="flex items-center gap-1.5">
-        <UButton icon="i-ph-terminal-window-duotone" label="Connect" @click="emit('connect')" />
+        <UButton
+          color="primary"
+          icon="i-ph-terminal-window-duotone"
+          label="Connect"
+          @click="emit('connect')"
+        />
         <UDropdownMenu :items="menu" :content="{ align: 'end' }">
           <UButton
             icon="i-ph-dots-three"
-            color="neutral"
             variant="outline"
             :aria-label="`More for ${hostName(host)}`"
           />
@@ -220,7 +215,6 @@ function when(at: number) {
     </header>
 
     <section class="flex flex-col gap-3 card px-4 py-3.5" aria-label="Monitoring">
-      <!-- charts carry own label -->
       <span v-if="monitoring !== 'charts'" class="t-label">Monitoring</span>
       <MonitorCharts v-if="monitoring === 'charts'" :target="host" wide />
       <div v-else-if="monitoring === 'off'" class="flex flex-wrap items-center gap-3.5">
@@ -231,12 +225,7 @@ function when(at: number) {
             server's auth logs.
           </span>
         </div>
-        <UButton
-          label="Watch this host"
-          color="neutral"
-          variant="outline"
-          @click="setWatched(host, true)"
-        />
+        <UButton label="Watch this host" variant="outline" @click="setWatched(host, true)" />
       </div>
       <div v-else class="flex flex-col gap-1 text-sm">
         <span class="font-medium">Live only while a terminal is open</span>
@@ -255,7 +244,6 @@ function when(at: number) {
           <dd class="truncate font-mono text-xs">{{ hostLabel(host) }}</dd>
           <dt class="text-muted">Sign in with</dt>
           <dd v-if="keyName">Key {{ keyName }}</dd>
-          <!-- field gets own full-width row, dd column too narrow -->
           <template v-else-if="host.savedPassword">
             <dd>Saved password</dd>
             <dd class="col-span-2">
@@ -273,7 +261,6 @@ function when(at: number) {
                     v-if="shown"
                     icon="i-ph-copy-duotone"
                     size="xs"
-                    color="neutral"
                     variant="link"
                     aria-label="Copy password"
                     @click="copyText(shown, 'Password copied')"
@@ -281,7 +268,6 @@ function when(at: number) {
                   <UButton
                     :icon="shown ? 'i-ph-eye-slash-duotone' : 'i-ph-eye-duotone'"
                     size="xs"
-                    color="neutral"
                     variant="link"
                     :aria-label="shown ? 'Hide password' : 'Show password'"
                     @click="shown ? (shown = '') : ((revealOpen = true), (master = ''))"
@@ -289,7 +275,6 @@ function when(at: number) {
                   <UButton
                     icon="i-ph-trash-duotone"
                     size="xs"
-                    color="neutral"
                     variant="link"
                     aria-label="Forget password"
                     @click="forgetPassword"
@@ -330,7 +315,6 @@ function when(at: number) {
           <UButton
             label="Edit rules"
             size="xs"
-            color="neutral"
             variant="ghost"
             class="ml-auto"
             @click="openSettings('monitoring')"
@@ -366,7 +350,6 @@ function when(at: number) {
           label="Check now"
           icon="i-ph-arrows-clockwise"
           size="xs"
-          color="neutral"
           variant="ghost"
           class="ml-auto"
           :loading="checking"
@@ -382,7 +365,6 @@ function when(at: number) {
             icon="i-ph-plus"
             trailing-icon="i-ph-caret-down"
             size="xs"
-            color="neutral"
             variant="outline"
           />
         </UDropdownMenu>
@@ -420,7 +402,6 @@ function when(at: number) {
             :key="a.label"
             :label="a.label"
             size="xs"
-            color="neutral"
             variant="outline"
             @click="a.run"
           />
@@ -429,7 +410,6 @@ function when(at: number) {
               icon="i-ph-dots-three"
               size="xs"
               square
-              color="neutral"
               variant="ghost"
               :aria-label="`More for ${s.name}`"
             />
@@ -482,7 +462,13 @@ function when(at: number) {
         </form>
       </template>
       <template #footer>
-        <UButton type="submit" form="reveal-form" label="Show" :loading="revealing" />
+        <UButton
+          color="primary"
+          type="submit"
+          form="reveal-form"
+          label="Show"
+          :loading="revealing"
+        />
       </template>
     </UModal>
   </main>

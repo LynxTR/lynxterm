@@ -1,7 +1,5 @@
-// Finished commands leave terminal as HTML: real cards, native selection, reflow.
 import type { IBufferCell, IBufferLine } from "@xterm/xterm";
 
-/** ANSI colors: live theme and cards. */
 export const ANSI = {
   black: "#2e3440",
   red: "#ff8a8a",
@@ -36,7 +34,7 @@ const PALETTE = [
   ...Array.from({ length: 24 }, (_, i) => hex((8 + i * 10) * 0x010101)),
 ];
 
-const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 function fg(c: IBufferCell) {
   if (c.isFgRGB()) return hex(c.getFgColor());
@@ -69,7 +67,6 @@ function style(c: IBufferCell) {
 /** Row as escaped HTML. `trim`: drop trailing blanks (not before wrap). */
 export function rowHtml(line: IBufferLine, cell: IBufferCell, trim = true) {
   let end = line.length;
-  // Blank cell with default background adds nothing.
   while (trim && end > 0) {
     const c = line.getCell(end - 1, cell);
     if (!c || c.getChars() || !c.isBgDefault() || c.isInverse()) break;

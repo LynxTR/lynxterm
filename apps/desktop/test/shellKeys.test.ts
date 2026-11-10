@@ -14,9 +14,9 @@ const press = (
   });
 
 test("text-field shortcuts become shell keys; others pass through", () => {
-  expect(press("Backspace", { ctrl: true })).toBe("\x17"); // Ctrl+W
-  expect(press("ArrowLeft", { ctrl: true })).toBe("\x1bb"); // Alt+B
-  expect(press("ArrowRight", { meta: true })).toBe("\x05"); // Ctrl+E
+  expect(press("Backspace", { ctrl: true })).toBe("\x17");
+  expect(press("ArrowLeft", { ctrl: true })).toBe("\x1bb");
+  expect(press("ArrowRight", { meta: true })).toBe("\x05");
   // plain keys, Shift (selection) and extra modifiers stay the terminal's
   expect(press("Backspace")).toBeUndefined();
   expect(press("ArrowLeft", { ctrl: true, shift: true })).toBeUndefined();

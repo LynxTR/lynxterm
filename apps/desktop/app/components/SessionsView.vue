@@ -2,7 +2,6 @@
 const { tabs, current, focusedPane, activePane, isSplit, toggleSplit, closePane, panel } =
   useSessions();
 
-// Shortcut: Ctrl plus `keys`.
 const tool = (
   id: NonNullable<typeof panel.value>,
   label: string,
@@ -42,7 +41,6 @@ defineShortcuts(
     ),
   ),
 );
-// Open terminals detect host OS, for logo.
 watch(
   () => tabs.value.flatMap((t) => t.panes).filter((p) => p.session !== undefined),
   (panes) => panes.forEach((p) => detectOs(p.target)),
@@ -70,7 +68,6 @@ watch(
       </div>
     </div>
 
-    <!-- width animates, panel keeps 340px: no snap -->
     <div
       class="flex shrink-0 justify-start overflow-hidden transition-[width] duration-200 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
       :style="{ width: panel ? '340px' : '0px' }"

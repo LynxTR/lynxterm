@@ -12,7 +12,6 @@ const steps = ["Welcome", "Vault", "Sync", "Hosts"].map((title) => ({ title }));
       class="flex h-11 shrink-0 items-stretch border-b border-default bg-sunken"
       :class="isMac && 'pl-20'"
     >
-      <!-- same bar as app.vue header -->
       <span
         data-tauri-drag-region
         class="flex items-center px-3.5 pt-1.5"

@@ -1,8 +1,6 @@
 import { useResizeObserver } from "@vueuse/core";
 import type { WatchSource } from "vue";
 
-/** Active item's box in `container`: one highlight glides between items. Remeasures on `on`
- *  change, resize, `measure()`. */
 export function useIndicator(container: Ref<HTMLElement | null>, on: WatchSource, active: string) {
   const box = ref({ left: 0, top: 0, width: 0, height: 0, shown: false });
   function measure() {

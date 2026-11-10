@@ -8,7 +8,6 @@ pub const KIND: &str = "host";
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Host {
-    /// Empty when saving a new host.
     #[serde(default)]
     pub id: String,
     #[serde(default)]
@@ -19,10 +18,8 @@ pub struct Host {
     pub port: u16,
     pub user: String,
     pub key_id: String,
-    /// Server OS id (debian, ubuntu…), for logo; empty until seen.
     #[serde(default)]
     pub os: String,
-    /// Free labels (nginx, customer-acme…), lowercase.
     #[serde(default)]
     pub tags: Vec<String>,
     /// Kept only when user saves it. Never sent to frontend.
@@ -45,7 +42,6 @@ fn find(
         .find(|(_, h)| h.host == host && h.port == port && h.user == user))
 }
 
-/// Empty if none.
 pub fn saved_password(vault: &Vault, host: &str, port: u16, user: &str) -> Result<String, String> {
     Ok(find(vault, host, port, user)?.map_or_else(String::new, |(_, h)| h.password))
 }

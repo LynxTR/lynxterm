@@ -38,7 +38,7 @@ const SYNC_TOKEN_AAD: &[u8] = b"lynxterm/v1/sync-token";
 #[cfg(test)]
 pub const FAST: Kdf = Kdf { m: 8, t: 1, p: 1 };
 
-#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq)]
 pub struct Kdf {
     m: u32,
     t: u32,
@@ -57,14 +57,14 @@ impl Kdf {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
 pub struct Sealed {
     nonce: String,
     ct: String,
 }
 
 /// What new device needs. Opaque to Worker.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Header {
     kdf: Kdf,
     salt: String,
@@ -226,7 +226,6 @@ fn write(path: &Path, file: &VaultFile) -> Result<(), String> {
     fs::rename(&tmp, path).map_err(err)
 }
 
-/// Rewraps vault key; returns new auth key.
 fn set_password(header: &mut Header, vk: &[u8; 32], password: &str) -> Result<Key32, String> {
     if password.chars().count() < 10 {
         return Err("Use at least 10 characters for the master password".into());
@@ -271,7 +270,6 @@ fn unlock(path: PathBuf, password: &str) -> Result<Open, String> {
     Ok(Open { vk, file, path })
 }
 
-/// (vault, new auth key to update Worker).
 pub(crate) fn recover(
     path: PathBuf,
     code: &str,
@@ -290,7 +288,6 @@ pub(crate) fn recover(
     Ok((Open { vk, file, path }, auth))
 }
 
-/// Fresh device adopts vault from Worker.
 pub fn join(
     path: PathBuf,
     header: Header,
@@ -313,9 +310,8 @@ pub fn new_id() -> String {
     HEXLOWER.encode(&<[u8; 16]>::generate())
 }
 
-/// `*_list` and `*_save` commands for one vault kind: list fills ids in; save gives a new item
-/// an id and returns it. An id from outside must look like ours (hex): it names a vault entry
-/// and may name a file, so nothing else gets through.
+/// An id from outside must be letters and digits: it names a vault entry and may name a file,
+/// so nothing else gets through.
 #[macro_export]
 macro_rules! kind_commands {
     ($list:ident, $save:ident($arg:ident): $ty:ident, $kind:expr) => {
@@ -388,7 +384,6 @@ impl Open {
         write(&self.path, &self.file)
     }
 
-    /// (synced server rev, dirty).
     pub fn sync_state(&self, id: &str) -> (u64, bool) {
         self.file
             .items
@@ -448,7 +443,6 @@ impl Open {
         write(&self.path, &self.file)
     }
 
-    /// Unpushed local changes, skipped kinds excluded.
     pub fn dirty(&self) -> Vec<WireItem> {
         let skip = self.skipped();
         self.file
@@ -574,7 +568,6 @@ fn quick_unlock(path: PathBuf) -> Result<Open, String> {
     Ok(Open { vk, file, path })
 }
 
-/// "none" (no vault yet), "locked" or "unlocked".
 #[tauri::command]
 pub fn vault_status(app: AppHandle, vault: State<'_, Vault>) -> Result<&'static str, String> {
     let mut guard = vault.0.lock().unwrap();
@@ -672,7 +665,7 @@ pub fn app_restart(app: AppHandle) {
     app.restart();
 }
 
-/// Host, group, snippet, service or key. Forwards use `forward_delete`, which also stops one.
+/// Forwards use `forward_delete`, which also stops one.
 #[tauri::command]
 pub fn item_delete(vault: State<'_, Vault>, id: String) -> Result<(), String> {
     vault.with(|v| v.delete(&id))
@@ -721,7 +714,6 @@ mod tests {
         open.apply_push(&pushed, &accepted).unwrap();
         assert!(open.dirty().is_empty());
 
-        // Local edit while another device pushed rev 2.
         open.put("a", "host", &"ours").unwrap();
         let theirs = WireItem {
             id: "a".into(),
@@ -754,12 +746,10 @@ mod tests {
     fn worker_headers_keep_the_recovery_part_and_strong_settings() {
         let path = temp("forged");
         let (mut open, code) = create(path.clone(), "correct horse battery", FAST).unwrap();
-        // Password change from another device: adopted.
         let mut changed = open.header().clone();
         set_password(&mut changed, &open.vk, "new password here").unwrap();
         open.apply_pull(Some(changed.clone()), vec![]).unwrap();
 
-        // Real check beside junk keys, or weak settings: refused.
         let junk = Sealed {
             nonce: BASE64.encode(&[0u8; 24]),
             ct: BASE64.encode(&[0u8; 48]),
@@ -783,7 +773,6 @@ mod tests {
         }
         assert!(derive("new password here", &changed.salt, weak).is_err());
 
-        // Neither saved: new password and recovery code still open vault.
         assert!(unlock(path.clone(), "new password here").is_ok());
         assert!(recover(path.clone(), &code, "another password").is_ok());
         let _ = fs::remove_file(path);

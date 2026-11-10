@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { Ref } from "vue";
 
 export function useFilter<T>(list: () => T[], text: (item: T) => string) {
@@ -9,9 +10,18 @@ export function useFilter<T>(list: () => T[], text: (item: T) => string) {
   return { filter, shown };
 }
 
-/** Detail pane's copy of an item: first one until another picked, and after delete. New item:
- *  draft without id. `submit` saves, keeps id, toasts `saved`. Deep copy: nested fields
- *  (tags, service functions) edited in draft must not change list before save. */
+export function vaultList<T extends { name: string }>(list: Ref<T[]>, kind: string) {
+  const refresh = async () => {
+    list.value = (await invoke<T[]>(`${kind}s_list`)).sort((a, b) => a.name.localeCompare(b.name));
+  };
+  const save = (item: T) =>
+    invoke<string>(`${kind}_save`, { [kind]: item }).then((id) => refresh().then(() => id));
+  const remove = (id: string) => invoke("item_delete", { id }).then(refresh);
+  return { refresh, save, remove };
+}
+
+/** Deep copy: nested fields (tags, service functions) edited in draft must not change list
+ *  before save. */
 export function useDraft<T extends { id?: string }>(
   list: Ref<T[]>,
   save: (item: T) => Promise<string>,

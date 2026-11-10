@@ -1,6 +1,3 @@
-//! Per-host command history (opt-in), remote command list, shell integration install.
-//! History in vault: encrypted, synced.
-
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -25,8 +22,7 @@ pub fn history_list(vault: State<'_, Vault>) -> Result<Vec<History>, String> {
     Ok(items.into_iter().map(|(_, h)| h).collect())
 }
 
-/// Replaces host's history. Sync conflict can leave twin items per host; save folds
-/// them into one.
+/// Sync conflict can leave twin items per host; save folds them into one.
 #[tauri::command]
 pub fn history_save(
     vault: State<'_, Vault>,
@@ -50,7 +46,6 @@ pub fn history_save(
     })
 }
 
-/// All hosts when `host_key` is None.
 #[tauri::command]
 pub fn history_clear(vault: State<'_, Vault>, host_key: Option<String>) -> Result<(), String> {
     vault.with(|v| {
@@ -63,7 +58,6 @@ pub fn history_clear(vault: State<'_, Vault>, host_key: Option<String>) -> Resul
     })
 }
 
-/// Every command on server PATH, for suggestions.
 #[tauri::command]
 pub async fn ssh_commands(sessions: State<'_, Sessions>, id: u32) -> Result<Vec<String>, String> {
     let script = "command -v bash >/dev/null 2>&1 || exit 0\n\
@@ -76,7 +70,6 @@ pub async fn ssh_commands(sessions: State<'_, Sessions>, id: u32) -> Result<Vec<
         .collect())
 }
 
-/// Appends integration block to ~/.bashrc and ~/.zshrc, once.
 const INSTALL: &str = concat!(
     r#"case "$SHELL" in
   */zsh) [ -f ~/.zshrc ] || touch ~/.zshrc ;;
@@ -91,7 +84,6 @@ for f in ~/.bashrc ~/.zshrc; do
     "\nLYNXTERM_EOF\ndone\n"
 );
 
-/// Deletes block from ~/.bashrc and ~/.zshrc; rest untouched.
 const REMOVE: &str = r#"for f in ~/.bashrc ~/.zshrc; do
   [ -f "$f" ] || continue
   grep -q '>>> lynxterm shell integration' "$f" || continue
@@ -100,7 +92,6 @@ const REMOVE: &str = r#"for f in ~/.bashrc ~/.zshrc; do
 done
 "#;
 
-/// On saved host, no terminal open.
 #[tauri::command]
 pub async fn shell_integration_host(
     vault: State<'_, Vault>,
@@ -117,32 +108,15 @@ pub async fn shell_integration_host(
 #[cfg(test)]
 mod tests {
     use super::{INSTALL, REMOVE};
-    use std::io::Write;
-    use std::process::{Command, Stdio};
-
-    fn sh(home: &std::path::Path, script: &str) {
-        let mut child = Command::new("sh")
-            .arg("-s")
-            .env("HOME", home)
-            .env("SHELL", "/bin/bash")
-            .stdin(Stdio::piped())
-            .spawn()
-            .unwrap();
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(script.as_bytes())
-            .unwrap();
-        assert!(child.wait().unwrap().success());
-    }
+    use crate::sh;
+    use std::process::Command;
 
     #[test]
     fn installs_once_and_bash_emits_the_markers() {
         let home = std::env::temp_dir().join(format!("lynxterm-home-{}", std::process::id()));
         std::fs::create_dir_all(&home).unwrap();
         sh(&home, INSTALL);
-        sh(&home, INSTALL); // second run must not add second copy
+        sh(&home, INSTALL);
         let rc = std::fs::read_to_string(home.join(".bashrc")).unwrap();
         assert_eq!(rc.matches(">>> lynxterm shell integration").count(), 1);
 

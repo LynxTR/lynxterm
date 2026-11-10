@@ -5,7 +5,6 @@ defineProps<{
   selected?: boolean;
   mono?: boolean;
   dim?: boolean;
-  /** Not clickable. */
   plain?: boolean;
 }>();
 defineEmits<{ select: [] }>();
@@ -28,7 +27,6 @@ defineEmits<{ select: [] }>();
         }}</span>
         <span v-if="subtitle" class="block truncate t-sub">{{ subtitle }}</span>
       </span>
-      <!-- pills truncate before title -->
       <span
         v-if="$slots.default"
         class="flex max-w-[60%] min-w-0 shrink items-center justify-end gap-1.5 [&>*]:min-w-0"

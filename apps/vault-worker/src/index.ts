@@ -55,9 +55,8 @@ function later(ms: number) {
 
 const tooMany = (ms: number, error: string) => fail(429, `${error} Try again ${later(ms)}.`);
 
-const hex = (buf: ArrayBuffer) => new Uint8Array(buf).toHex();
 const digest = (text: string) => crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
-const sha256 = async (text: string) => hex(await digest(text));
+const sha256 = async (text: string) => new Uint8Array(await digest(text)).toHex();
 
 // Hash both sides: equal lengths for timingSafeEqual, no length leak.
 const same = async (a: string, b: string) =>
@@ -71,7 +70,7 @@ async function meta(env: Env, key: string) {
 }
 
 async function newDeviceToken(env: Env) {
-  const token = hex(crypto.getRandomValues(new Uint8Array(32)).buffer);
+  const token = crypto.getRandomValues(new Uint8Array(32)).toHex();
   await env.DB.prepare("INSERT INTO devices (token_hash, created_at) VALUES (?, ?)")
     .bind(await sha256(token), Date.now())
     .run();

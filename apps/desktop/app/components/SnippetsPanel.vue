@@ -39,7 +39,6 @@ function manage() {
         <UButton
           label="Run"
           size="xs"
-          color="neutral"
           variant="outline"
           :disabled="disabled"
           :title="disabled ? 'Waiting for the session to connect' : 'Type into the terminal'"
@@ -60,7 +59,6 @@ function manage() {
         label="Manage snippets"
         icon="i-ph-sliders-horizontal-duotone"
         size="xs"
-        color="neutral"
         variant="outline"
         class="w-full"
         @click="manage"

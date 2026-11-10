@@ -24,10 +24,8 @@ const groups = ref<Group[]>([]);
 
 const byName = (name?: string) => groups.value.find((g) => g.name === name);
 
-/** "" for no group or no color. */
 export const groupColor = (name?: string) => byName(name)?.color ?? "";
 
-/** Names in Settings order (then by name), plus names hosts use without saved group. */
 const names = computed(() => {
   const saved = [...groups.value]
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.name.localeCompare(b.name))
@@ -71,11 +69,8 @@ export function useGroups() {
     await save({ name, color, order });
   };
 
-  const setColor = async (name: string, color: string) => {
-    await save({ ...(byName(name) ?? { name }), color });
-  };
+  const setColor = (name: string, color: string) => save({ ...(byName(name) ?? { name }), color });
 
-  /** Moves hosts too; renaming onto existing group merges. */
   const rename = async (from: string, to: string) => {
     to = to.trim();
     if (!to || to === from) return;
@@ -89,7 +84,6 @@ export function useGroups() {
     await refresh();
   };
 
-  /** Hosts stay, ungrouped. */
   const remove = async (name: string) => {
     await editHosts(
       (h) => h.group === name,
@@ -100,7 +94,6 @@ export function useGroups() {
     await refresh();
   };
 
-  /** Saves only groups whose position changed. Names only hosts use get saved too. */
   const move = async (name: string, to: number) => {
     const list = names.value.filter((n) => n !== name);
     list.splice(to, 0, name);
@@ -112,7 +105,6 @@ export function useGroups() {
     await refresh();
   };
 
-  /** Renaming onto existing tag merges. */
   const renameTag = async (from: string, to: string) => {
     to = normalizeTag(to);
     if (!to || to === from) return;

@@ -1,25 +1,21 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// One live stream per server, shared by host card, details and Monitor panel so readings match.
-// Runs while anything shows it.
 type Target = { user: string; host: string; port: number };
 type Stream = { samples: Sample[]; error: string; viewers: number; running: boolean };
 
 const streams = reactive(new Map<string, Stream>());
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const savedHost = (h: Target) => useHosts().hosts.value.find((x) => hostKey(x) === hostKey(h));
 
 /** Runs fixed metrics.rs script: over open terminal if any, else background connection (saved
  *  key-based hosts only; passwords never stored). */
 export function runMetrics(h: Target, action: string) {
-  const session = useSessions().sessionFor(h);
-  if (session !== undefined) return invoke<string>("metrics", { id: session, action });
+  const session = useSessions().sessionFor(h) ?? null;
   const saved = savedHost(h);
-  if (saved?.keyId) return invoke<string>("metrics_host", { hostId: saved.id, action });
-  return Promise.reject("Uses a password, so open a terminal to it first");
+  if (session === null && !saved?.keyId)
+    return Promise.reject("Uses a password, so open a terminal to it first");
+  return invoke<string>("metrics", { session, hostId: saved?.id ?? "", action });
 }
 
-// last 5 minutes (1 sample/s), memory only; history is server's own file.
 async function loop(s: Stream, h: Target) {
   s.running = true;
   while (s.viewers > 0) {
@@ -56,7 +52,6 @@ function subscribe(h: Target) {
 
 export const liveOf = (h: Target) => streams.get(hostKey(h));
 
-/** Streams these hosts while caller mounted. */
 export function useLiveMetrics(targets: () => Target[]) {
   watch(
     () => targets().map(hostKey).join("\n"),
@@ -68,8 +63,6 @@ export function useLiveMetrics(targets: () => Target[]) {
   );
 }
 
-// Saved host's OS (for logo): asked once, over first connection to reach it; saved on host so
-// syncs.
 const askedOs = new Set<string>();
 export function detectOs(h: Target) {
   const saved = savedHost(h);
@@ -83,8 +76,6 @@ export function detectOs(h: Target) {
     .catch(() => {});
 }
 
-// 7-day history on by default: first answer installs its cron job unless user turned it off
-// there (Monitor panel). Once per run.
 const historyChecks = new Map<string, Promise<void>>();
 export function ensureHistory(h: Target) {
   const key = hostKey(h);

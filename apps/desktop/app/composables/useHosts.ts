@@ -27,11 +27,15 @@ export const hostKey = (h: { user: string; host: string; port: number }) =>
   `${h.user}@${h.host}:${h.port}`;
 
 const hosts = ref<SavedHost[]>([]);
+export const hostItems = computed(() =>
+  hosts.value.map((h) => ({ label: hostName(h), description: hostLabel(h), value: h.id! })),
+);
+export const savedHost = (h: { user: string; host: string; port: number }) =>
+  hosts.value.find((x) => hostKey(x) === hostKey(h));
 
 export const hostLabel = (h: { user: string; host: string; port: number }) =>
   `${h.user}@${maskHost(h.host)}${h.port === 22 ? "" : `:${h.port}`}`;
 
-/** "user@host" or "user@host:port", optional "ssh " prefix; else null. */
 export function parseTarget(text: string) {
   const m = text.trim().match(/^(?:ssh\s+)?([^\s@]+)@([^\s@:]+)(?::(\d{1,5}))?$/);
   return m ? { user: m[1]!, host: m[2]!, port: Number(m[3] ?? 22), keyId: "" } : null;
@@ -59,7 +63,7 @@ export function useHosts() {
   };
 
   const save = async (h: SavedHost) => {
-    const id = hosts.value.find((x) => hostKey(x) === hostKey(h))?.id;
+    const id = savedHost(h)?.id;
     await hostSave({ ...h, id });
     await refresh();
   };

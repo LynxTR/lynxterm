@@ -1,5 +1,3 @@
-// Dev only, plain browser (no Tauri): answer commands with sample data to check layouts at
-// any width. Never active inside app.
 import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 import type { Channel } from "@tauri-apps/api/core";
 
@@ -27,7 +25,7 @@ export default defineNuxtPlugin(() => {
     os = "",
     tags: string[] = [],
   ) => ({ id, name, group, host: ip, port: 22, user, keyId: "k1", os, tags });
-  const shells: ((typed: string) => void)[] = []; // by session id
+  const shells: ((typed: string) => void)[] = [];
   // ?vault=none: first run (welcome, vault, sync, hosts). ?vault=locked: unlock screen.
   const params = new URLSearchParams(location.search);
   const vault = params.get("vault");
@@ -126,12 +124,9 @@ export default defineNuxtPlugin(() => {
       params.has("shError")
         ? `sh: ${script.split("\n").length}: Syntax error: end of file unexpected (expecting "fi")`
         : null,
-    // Docker fine with an update, Swap not installed, anything else installed with a warning.
     service_run: async ({ serviceId, function: fn }: { serviceId: string; function: string }) => {
       await new Promise((r) => setTimeout(r, 400));
-      const name = (data.services_list as Item[]).find((s) => s.id === serviceId)?.name;
       if (fn === "preflight") return { code: 1, output: "Will ask for sudo password\n" };
-      // Built-ins: Node and Go on every sample host, the rest not installed.
       const builtin = serviceId.startsWith("builtin:") ? serviceId.slice(8) : "";
       if (fn === "detect" && builtin)
         return builtin === "node"
@@ -142,9 +137,7 @@ export default defineNuxtPlugin(() => {
       if (fn === "detect")
         return serviceId === "sv1"
           ? { code: 0, output: "Docker version 27.3.1\nupdate: 5:27.4.0-1~ubuntu.24.04\n" }
-          : name === "Swap"
-            ? { code: 1, output: "" }
-            : { code: 0, output: "1.0.2\n" };
+          : { code: 0, output: "1.0.2\n" };
       return serviceId === "sv1"
         ? { code: 0, output: "4 containers running\n" }
         : { code: 1, output: "Running with default limits, not strict\n" };
@@ -183,7 +176,6 @@ export default defineNuxtPlugin(() => {
       { hostKey: "root@203.0.113.7:2222", commands: ["htop", "journalctl -u nginx -f"] },
     ],
     sync_skipped: ["history"],
-    // "wrong" is the only wrong master password; restart lands on first run.
     vault_erase: ({ password }: { password: string }) => {
       if (password === "wrong") throw "Wrong master password";
     },
@@ -218,9 +210,6 @@ export default defineNuxtPlugin(() => {
       if (password === "wrong") throw "Wrong master password";
       signedOut = false;
     },
-    // Shell that echoes and answers setup line like real hooks (shell-integration.sh), to try
-    // typing, suggestions, command blocks. "false" fails, "sleep" is slow. Starship-style
-    // prompt checks Nerd Font icons.
     ssh_open: ({ onData, command }: { onData: Channel<ArrayBuffer>; command?: string }) => {
       const echo = (text: string) =>
         onData.onmessage(new TextEncoder().encode(text).buffer as ArrayBuffer);
@@ -276,8 +265,16 @@ export default defineNuxtPlugin(() => {
             entries: [dir("app"), { name: ".bashrc", isDir: false, size: 3771 }],
           };
     },
-    // 7 days of one-a-minute history with 3-hour gap (server off); live sample each second.
-    metrics: ({ action }: { action: string }) => {
+    metrics: ({
+      session,
+      hostId,
+      action,
+    }: {
+      session: number | null;
+      hostId: string;
+      action: string;
+    }) => {
+      if (session === null && hostId === "h4") return Promise.reject("unreachable");
       const now = Math.floor(Date.now() / 1000);
       const line = (t: number) => {
         const day = Math.sin((t / 86400) * 2 * Math.PI);
@@ -296,10 +293,6 @@ export default defineNuxtPlugin(() => {
         if (now - t < 86400 * 2 || now - t > 86400 * 2 + 10800) lines.push(line(t));
       return lines.join("\n");
     },
-    metrics_host: ({ hostId, action }: { hostId: string; action: string }) =>
-      hostId === "h4"
-        ? Promise.reject("unreachable")
-        : (data.metrics as (a: { action: string }) => unknown)({ action }),
     activity_list: () => {
       const now = Math.floor(Date.now() / 1000);
       return [

@@ -6,10 +6,7 @@ const toast = useToast();
 const name = (h: KnownHost) =>
   h.hosts ? h.hosts.split(",").map(maskHost).join(", ") : "Hashed entry";
 const keyOf = (h: KnownHost) => `${h.line}-${h.fingerprint}`;
-const savedFor = (h: KnownHost) =>
-  hosts.value.find((s) =>
-    h.hosts.split(",").some((n) => n === s.host || n === `[${s.host}]:${s.port}`),
-  );
+const savedFor = (h: KnownHost) => hosts.value.find((s) => knows(h, s));
 
 const { filter, shown } = useFilter(
   () => knownHosts.value,
@@ -50,7 +47,6 @@ async function forget() {
         <UButton
           icon="i-ph-arrows-clockwise"
           size="sm"
-          color="neutral"
           variant="ghost"
           aria-label="Reload from disk"
           title="Reload from disk"
@@ -89,11 +85,10 @@ async function forget() {
           <UButton
             icon="i-ph-copy-duotone"
             label="Copy fingerprint"
-            color="neutral"
             variant="outline"
             @click="copyText(selected.fingerprint, 'Fingerprint copied')"
           />
-          <UButton label="Forget" color="neutral" variant="ghost" @click="forget" />
+          <UButton label="Forget" variant="ghost" @click="forget" />
         </div>
       </div>
 

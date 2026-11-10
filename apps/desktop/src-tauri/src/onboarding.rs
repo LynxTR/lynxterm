@@ -1,6 +1,3 @@
-//! First-run helpers: ~/.ssh/config hosts, sign-up page in browser. Also GitHub
-//! newer-release check.
-
 use std::{fs, process::Command};
 
 use serde::{Deserialize, Serialize};
@@ -12,17 +9,13 @@ use crate::sync::HTTP;
 #[derive(Serialize, PartialEq, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct ConfigHost {
-    /// `Host` alias.
     pub name: String,
     pub host: String,
     pub port: u16,
     pub user: String,
-    /// `~/.ssh/...` as written, or empty.
     pub identity_file: String,
 }
 
-/// Concrete `Host` entries in ~/.ssh/config (no wildcards), `Host *` defaults filled in.
-/// Skips `Match` and `Include` blocks.
 #[tauri::command]
 pub fn ssh_config_hosts() -> Vec<ConfigHost> {
     let user = std::env::var("USER")
@@ -44,7 +37,7 @@ pub(crate) fn parse(text: &str, default_user: &str) -> Vec<ConfigHost> {
         identity_file: String,
     }
     let mut blocks: Vec<Block> = vec![];
-    let mut skipping = false; // inside Match block
+    let mut skipping = false;
     for line in text.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -118,7 +111,6 @@ pub struct UpdateCheck {
 pub struct Release {
     version: String,
     url: String,
-    /// Installer for this computer, if release has one.
     download: Option<Download>,
 }
 
@@ -126,11 +118,9 @@ pub struct Release {
 pub struct Download {
     name: String,
     url: String,
-    /// "AppImage", ".deb package", "disk image", "installer"…
     kind: String,
 }
 
-/// "Linux, x86_64", "macOS, Apple silicon", "Windows, x86_64".
 fn system() -> String {
     use std::env::consts::{ARCH, OS};
     let os = match OS {
@@ -147,7 +137,6 @@ fn system() -> String {
     format!("{os}, {arch}")
 }
 
-/// Linux format to offer: AppImage if running from one, else system package format.
 fn linux_format() -> &'static str {
     if std::env::var_os("APPIMAGE").is_some() {
         "appimage"
@@ -166,7 +155,6 @@ struct Asset {
     browser_download_url: String,
 }
 
-/// Matching installer among release assets.
 fn pick(assets: &[Asset], os: &str, arch: &str, linux: &str) -> Option<Download> {
     let arch_names: &[&str] = match arch {
         "aarch64" => &["aarch64", "arm64"],
@@ -191,8 +179,6 @@ fn pick(assets: &[Asset], os: &str, arch: &str, linux: &str) -> Option<Download>
     })
 }
 
-/// Newest GitHub release (no drafts, no pre-releases), with installer for this computer.
-/// UI compares versions.
 #[tauri::command]
 pub async fn latest_release() -> Result<UpdateCheck, String> {
     #[derive(Deserialize)]
@@ -311,7 +297,6 @@ mod tests {
             name("linux", "x86_64", "appimage").as_deref(),
             Some("Lynxterm_0.2.0_amd64.AppImage")
         );
-        // no arm64 Linux build: nothing, not wrong file
         assert_eq!(name("linux", "aarch64", "deb"), None);
     }
 

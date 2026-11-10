@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
 
+const link = { variant: "link", size: "xs", class: "px-0" } as const;
+
 const emit = defineEmits<{ done: [] }>();
 const onboarding = useOnboarding();
 const sync = useSync();
@@ -39,7 +41,6 @@ const heading = computed((): [string, string] => {
 });
 const intoGroup = ref(true);
 const busy = ref(false);
-// Code hosts answer SSH but are not login servers.
 const notAServer = (h: ConfigHost) =>
   /(^|\.)(github\.com|gitlab\.com|bitbucket\.org)$/.test(h.host);
 const keyName = (path: string) => path.split("/").pop() || path;
@@ -61,7 +62,6 @@ function pick(name: string, on: boolean | "indeterminate") {
   else picked.value.delete(name);
 }
 
-/** Keys imported without passphrase; keys needing one skipped, their hosts ask password. */
 async function importHosts() {
   busy.value = true;
   try {
@@ -120,14 +120,7 @@ function finish() {
     <template v-if="step === 'sync' && !sync.url.value">
       <SyncConnect :password="onboarding.password()" />
       <div class="flex justify-end">
-        <UButton
-          label="Skip, this machine only"
-          color="neutral"
-          variant="link"
-          size="xs"
-          class="px-0"
-          @click="step = 'hosts'"
-        />
+        <UButton label="Skip, this machine only" v-bind="link" @click="step = 'hosts'" />
       </div>
     </template>
 
@@ -144,7 +137,7 @@ function finish() {
           is in use. Change it any time in Settings -> Sync.
         </p>
       </div>
-      <UButton label="Continue" size="lg" block @click="step = 'hosts'" />
+      <UButton color="primary" label="Continue" size="lg" block @click="step = 'hosts'" />
     </template>
 
     <template v-else-if="reviewing">
@@ -189,6 +182,7 @@ function finish() {
         />
       </div>
       <UButton
+        color="primary"
         :label="`Import ${picked.size} ${picked.size === 1 ? 'host' : 'hosts'} and finish`"
         size="lg"
         block
@@ -196,14 +190,7 @@ function finish() {
         :loading="busy"
         @click="importHosts"
       />
-      <UButton
-        label="Back"
-        color="neutral"
-        variant="link"
-        size="xs"
-        class="self-start px-0"
-        @click="reviewing = false"
-      />
+      <UButton label="Back" v-bind="link" class="self-start" @click="reviewing = false" />
     </template>
 
     <template v-else>
@@ -236,13 +223,7 @@ function finish() {
             class="flex-1"
             :ui="{ base: 'font-mono text-xs' }"
           />
-          <UButton
-            type="submit"
-            label="Add"
-            color="neutral"
-            variant="outline"
-            :disabled="!typedTarget"
-          />
+          <UButton type="submit" label="Add" variant="outline" :disabled="!typedTarget" />
         </UFieldGroup>
         <div v-if="hosts.length" class="flex flex-wrap gap-1.5">
           <UBadge

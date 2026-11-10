@@ -1,3 +1,5 @@
+const fieldSize = { sm: { base: "px-3 py-2 text-[13px]/4" }, md: { base: "px-3 py-2 text-sm/5" } };
+
 export default defineAppConfig({
   icon: {
     // Phosphor icons look small beside text (wide margins): scale up from centre of 256-unit box.
@@ -6,7 +8,6 @@ export default defineAppConfig({
   },
   ui: {
     colors: { primary: "amber", neutral: "zinc" },
-    // Only icons Nuxt UI parts here read.
     icons: {
       arrowLeft: "i-ph-arrow-left",
       check: "i-ph-check",
@@ -23,8 +24,8 @@ export default defineAppConfig({
       search: "i-ph-magnifying-glass-duotone",
     },
     modal: { slots: { content: "bg-muted", footer: "justify-end gap-2" } },
-    // Step bigger than Nuxt UI defaults: 28, 32, 36, 40px tall, xs to lg. Icons 18px from md.
     button: {
+      defaultVariants: { color: "neutral" },
       variants: {
         size: {
           xs: { base: "px-2.5 py-1.5 text-xs gap-1.5" },
@@ -81,15 +82,7 @@ export default defineAppConfig({
         },
       },
     },
-    select: {
-      variants: {
-        size: { sm: { base: "px-3 py-2 text-[13px]/4" }, md: { base: "px-3 py-2 text-sm/5" } },
-      },
-    },
-    selectMenu: {
-      variants: {
-        size: { sm: { base: "px-3 py-2 text-[13px]/4" }, md: { base: "px-3 py-2 text-sm/5" } },
-      },
-    },
+    select: { variants: { size: fieldSize } },
+    selectMenu: { variants: { size: fieldSize } },
   },
 });

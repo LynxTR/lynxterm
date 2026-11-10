@@ -33,7 +33,6 @@ async function load(to = path.value) {
   }
 }
 
-// New session (other tab or pane) starts at its home folder.
 watch(
   () => props.session,
   () => load(""),
@@ -67,7 +66,6 @@ async function open(entry: Entry) {
   }
 }
 
-// Drops anywhere on window upload to shown folder.
 const dropping = ref(false);
 let unlisten: (() => void) | undefined;
 onMounted(async () => {
@@ -118,7 +116,6 @@ function size(n: number) {
       <UButton
         icon="i-ph-arrow-up"
         size="xs"
-        color="neutral"
         variant="ghost"
         aria-label="Parent folder"
         :disabled="atTop"
@@ -127,7 +124,6 @@ function size(n: number) {
       <UButton
         icon="i-ph-house-duotone"
         size="xs"
-        color="neutral"
         variant="ghost"
         aria-label="Home folder"
         @click="load('')"
@@ -145,7 +141,6 @@ function size(n: number) {
       <UButton
         icon="i-ph-arrows-clockwise"
         size="xs"
-        color="neutral"
         variant="ghost"
         aria-label="Refresh"
         :loading="loading"

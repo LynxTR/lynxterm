@@ -32,6 +32,5 @@ const logos: Record<string, Logo> = {
   linux: { icon: "i-simple-icons-linux", bg: "#fcc624", dark: true },
 };
 
-/** undefined while OS unknown. */
 export const osLogo = (os?: string): Logo | undefined =>
   os ? (logos[os] ?? logos.linux) : undefined;

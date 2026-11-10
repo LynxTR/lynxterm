@@ -8,8 +8,6 @@ import {
   serviceFromFile,
 } from "../app/composables/serviceFile";
 
-// Built-in services (/services): each must split into functions unchanged, pass sh -n, have
-// no lint warnings, and name itself.
 const dir = new URL("../../../services/", import.meta.url);
 
 for (const name of readdirSync(dir).filter((f) => f.endsWith(".sh"))) {

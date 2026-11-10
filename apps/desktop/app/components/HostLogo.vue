@@ -1,5 +1,4 @@
 <script setup lang="ts">
-// OS logo on brand color; server icon until OS known.
 const props = defineProps<{ os?: string }>();
 const logo = computed(() => osLogo(props.os));
 </script>

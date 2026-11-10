@@ -1,6 +1,3 @@
-//! Per-host log of what Lynxterm did (snippets run, keys installed, files moved…).
-//! In vault like command history: encrypted, synced.
-
 use serde::{Deserialize, Serialize};
 use tauri::State;
 
@@ -10,11 +7,9 @@ const KIND: &str = "activity";
 const MAX_ENTRIES: usize = 500;
 
 #[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Entry {
     /// Unix seconds.
     at: u64,
-    /// snippet, key, upload, download, monitoring, integration…
     kind: String,
     title: String,
     detail: String,

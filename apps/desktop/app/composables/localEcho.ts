@@ -1,7 +1,5 @@
-// Slow link: typed text grey at cursor till server echoes (as Mosh). Drawn over terminal,
-// never written: wrong guess just vanishes. Grey only after server echoed a key on this line:
-// non-echoing prompt (password) never shows typed text. Enter keeps grey and caret put till
-// server moves cursor (`sent`).
+// Drawn over terminal, never written: wrong guess just vanishes. Grey only after server echoed
+// a key on this line: non-echoing prompt (password) never shows typed text.
 
 interface EchoScreen {
   readonly cols: number;
@@ -9,22 +7,17 @@ interface EchoScreen {
   cursor(): { x: number; y: number };
   /** Character in cell; "" when blank. */
   cell(x: number, y: number): string;
-  /** Nothing right of cursor that typing would push along. */
   restBlank(): boolean;
   /** Off, full-screen app, login question: no guess. */
   unsafe(): boolean;
 }
 
-/** Faster round trip: echo arrives before grey shows. */
 const SLOW_MS = 30;
 
-/** `text` waits for server at cell x, y. `echoes`: server echoed a key on this line.
- * `sent`: Enter pressed, server not answered yet. */
 export const echoState = () => ({ text: "", x: 0, y: 0, echoes: false, latency: 0, sent: false });
 
-/** Caller passes `pending`: can be reactive. */
 export function localEcho(screen: EchoScreen, pending = echoState()) {
-  let sentAt: number[] = []; // per pending character
+  let sentAt: number[] = [];
 
   function clear(newLine = false) {
     pending.text = "";
@@ -53,7 +46,7 @@ export function localEcho(screen: EchoScreen, pending = echoState()) {
       if (!screen.restBlank()) return;
       Object.assign(pending, screen.cursor());
     }
-    if (pending.x + pending.text.length + data.length >= screen.cols) return clear(); // would wrap
+    if (pending.x + pending.text.length + data.length >= screen.cols) return clear();
     pending.text += data;
     sentAt.push(...Array.from(data, () => performance.now()));
   }
@@ -82,7 +75,6 @@ export function localEcho(screen: EchoScreen, pending = echoState()) {
 
   const slow = () => pending.latency > SLOW_MS;
   const visible = () => !!pending.text && pending.echoes && slow();
-  /** Enter sent, no answer yet: spinner. */
   const waiting = () => pending.sent && slow();
   return { pending, visible, waiting, key, settle };
 }

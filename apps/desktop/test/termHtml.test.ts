@@ -3,7 +3,6 @@ import { expect, test } from "vite-plus/test";
 import { rowHtml } from "../app/composables/termHtml";
 
 type Fake = { ch: string; fg?: number; rgb?: number; bold?: boolean; bg?: number };
-/** Row from cells; only the parts rowHtml reads. */
 function row(cells: Fake[]) {
   const cell = (f: Fake = { ch: "" }) =>
     ({

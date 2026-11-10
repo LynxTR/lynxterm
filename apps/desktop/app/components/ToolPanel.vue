@@ -14,7 +14,6 @@ defineEmits<{ close: [] }>();
       <UButton
         icon="i-ph-x"
         size="xs"
-        color="neutral"
         variant="ghost"
         :aria-label="`Close ${title.toLowerCase()}`"
         class="ml-auto"

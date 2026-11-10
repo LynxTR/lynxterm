@@ -3,13 +3,10 @@ import type { SshTarget } from "~/components/SshTerminal.vue";
 
 const props = defineProps<{ target?: SshTarget }>();
 const emit = defineEmits<{ close: [] }>();
-const { hosts } = useHosts();
 const { forwards, running, save, start, stop } = useForwards();
 const toast = useToast();
 
-const host = computed(
-  () => props.target && hosts.value.find((h) => hostKey(h) === hostKey(props.target!)),
-);
+const host = computed(() => props.target && savedHost(props.target));
 const mine = computed(() => forwards.value.filter((f) => f.hostId === host.value?.id));
 const isRunning = (f: Forward) => running.value.includes(f.id!);
 
@@ -74,7 +71,6 @@ async function add(andStart: boolean) {
             <UButton
               :label="isRunning(f) ? 'Stop' : 'Start'"
               size="xs"
-              color="neutral"
               variant="outline"
               :loading="busy === f.id"
               :disabled="asksPassword(host) && !isRunning(f)"
@@ -120,13 +116,14 @@ async function add(andStart: boolean) {
           </UFormField>
           <div class="flex gap-2">
             <UButton
+              color="primary"
               type="submit"
               label="Add and start"
               size="sm"
               class="flex-1"
               :disabled="!host.keyId"
             />
-            <UButton label="Add" size="sm" color="neutral" variant="outline" @click="add(false)" />
+            <UButton label="Add" size="sm" variant="outline" @click="add(false)" />
           </div>
         </form>
       </template>

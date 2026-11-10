@@ -2,13 +2,6 @@
 defineProps<{ showNext?: boolean }>();
 const sync = useSync();
 
-const OPTIONS = [
-  { label: "Every 5 minutes", value: 5 },
-  { label: "Every 15 minutes", value: 15 },
-  { label: "Every hour", value: 60 },
-  { label: "Daily", value: 1440 },
-  { label: "Weekly", value: 10080 },
-];
 type Section = (typeof SYNC_SECTIONS)[number];
 const toggle = (s: Section, on: boolean | "indeterminate") =>
   sync.setEvery(s, on === true ? sync.every(s) : 0);
@@ -38,7 +31,7 @@ const toggle = (s: Section, on: boolean | "indeterminate") =>
       />
       <USelect
         :model-value="sync.every(s)"
-        :items="OPTIONS"
+        :items="SYNC_EVERY"
         :disabled="sync.busy.value || sync.isOff(s)"
         :aria-label="`How often ${s.label} syncs`"
         size="sm"
