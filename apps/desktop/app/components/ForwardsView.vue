@@ -14,11 +14,16 @@ const { filter, shown } = useFilter(
 const { draft, submit } = useDraft(forwards, save, "Forward saved");
 const isRunning = computed(() => !!draft.value?.id && running.value.includes(draft.value.id));
 const draftHost = computed(() => (draft.value ? hostOf(draft.value) : undefined));
-const path = computed(() => [
-  ["This machine", `localhost:${draft.value?.localPort}`, ""],
-  ["Through", draftHost.value ? hostLabel(draftHost.value) : "No host", "ssh"],
-  ["Reaches", `${maskHost(draft.value?.remoteHost ?? "")}:${draft.value?.remotePort}`, "tcp"],
-]);
+const path = computed(() => {
+  const h = draftHost.value;
+  const local = `localhost:${draft.value?.localPort}`;
+  const [remote, port] = [draft.value?.remoteHost ?? "", draft.value?.remotePort];
+  return [
+    ["This machine", local, "", local],
+    ["Through", h ? hostLabel(h) : "No host", "ssh", h ? hostLabel(h, false) : ""],
+    ["Reaches", `${maskHost(remote)}:${port}`, "tcp", `${remote}:${port}`],
+  ];
+});
 const saved = computed(() => forwards.value.find((f) => f.id === draft.value?.id));
 const edited = computed(
   () => !!saved.value && JSON.stringify(saved.value) !== JSON.stringify(draft.value),
@@ -138,7 +143,7 @@ async function forget() {
       </div>
 
       <div class="flex flex-wrap items-center justify-center gap-3 card p-5">
-        <template v-for="([label, at, via], i) in path" :key="label">
+        <template v-for="([label, at, via, raw], i) in path" :key="label">
           <span v-if="i" class="flex items-center gap-1.5 text-[11px] text-dimmed">
             {{ via }} <UIcon name="i-ph-arrow-right" class="size-4" />
           </span>
@@ -146,12 +151,16 @@ async function forget() {
             class="flex min-w-40 flex-col items-center gap-1 rounded-md border border-accented bg-default px-4 py-3 text-center"
           >
             <span class="text-[11px] text-dimmed">{{ label }}</span>
-            <span class="truncate font-mono text-xs">{{ at }}</span>
+            <CopyText v-if="raw" :text="raw" what="Address" class="truncate font-mono text-xs">{{
+              at
+            }}</CopyText>
+            <span v-else class="truncate font-mono text-xs">{{ at }}</span>
           </div>
         </template>
         <p class="w-full text-center text-xs text-muted">
           Connect your local client to
-          <span class="font-mono">localhost:{{ draft.localPort }}</span
+          <CopyText :text="`localhost:${draft.localPort}`" what="Local address" class="font-mono"
+            >localhost:{{ draft.localPort }}</CopyText
           >. Traffic goes over SSH to the host, then to the remote address from there. Listens on
           127.0.0.1 only.
         </p>

@@ -74,7 +74,7 @@ export function snooze(h: SavedHost) {
   snoozed.set(hostKey(h), until.getTime());
 }
 
-/** Call once, in a component's setup. */
+/** Call once, in component setup. */
 export function startAlerts() {
   const toast = useToast();
   const { hosts } = useHosts();
@@ -136,7 +136,7 @@ export function startAlerts() {
     },
   );
 
-  // Unreachable: error that lasts. Checked on timer, since retries repeat the error.
+  // Unreachable: lasting error. Checked on timer: retries repeat same error.
   setInterval(() => {
     for (const h of hosts.value) {
       const key = `${hostKey(h)}|unreachable`;

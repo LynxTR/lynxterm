@@ -89,23 +89,23 @@ const installKey = () =>
     installOpen.value = false;
   });
 
-const exportOpen = ref(false);
-const exportPassword = ref("");
 const exporting = ref(false);
 async function exportKey() {
+  const { id, name } = selected.value!;
+  const ok = await askConfirm({
+    title: `Export ${name}?`,
+    description: "Writes the private key and its .pub to your Downloads folder, unencrypted.",
+    label: "Export",
+  });
+  if (!ok) return;
   await withBusy(exporting, async () => {
-    const path = await invoke<string>("key_export", {
-      id: selected.value!.id,
-      password: exportPassword.value,
-    });
+    const path = await invoke<string>("key_export", { id });
     toast.add({
       title: "Private key saved",
       description: path,
       icon: "i-ph-download-simple-duotone",
     });
-    exportOpen.value = false;
   });
-  exportPassword.value = "";
 }
 
 const origin = (o: string) =>
@@ -203,7 +203,8 @@ const importKey = () =>
             label="Export…"
             size="sm"
             variant="outline"
-            @click="((exportOpen = true), (exportPassword = ''))"
+            :loading="exporting"
+            @click="exportKey"
           />
           <UButton label="Delete" size="sm" variant="ghost" @click="remove(selected.id)" />
         </div>
@@ -212,7 +213,9 @@ const importKey = () =>
       <div class="card px-4 py-3.5">
         <dl class="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-x-3.5 gap-y-2 text-xs">
           <dt class="text-muted">Fingerprint</dt>
-          <dd class="font-mono break-all">{{ selected.fingerprint }}</dd>
+          <dd class="font-mono break-all">
+            <CopyText :text="selected.fingerprint" what="Fingerprint" class="whitespace-normal" />
+          </dd>
           <dt class="text-muted">Created</dt>
           <dd>{{ selected.createdAt ? date(selected.createdAt) : "Unknown" }}</dd>
           <dt class="text-muted">Origin</dt>
@@ -233,7 +236,11 @@ const importKey = () =>
             @click="copyText(selected.publicKey, 'Public key copied')"
           />
         </div>
-        <p class="font-mono text-[11px]/relaxed break-all text-toned">{{ selected.publicKey }}</p>
+        <CopyText
+          :text="selected.publicKey"
+          what="Public key"
+          class="font-mono text-[11px]/relaxed break-all text-toned"
+        />
       </div>
 
       <div class="flex flex-col gap-2.5 card px-4 py-3.5">
@@ -395,30 +402,6 @@ const importKey = () =>
           form="install-form"
           label="Install"
           :loading="installing"
-        />
-      </template>
-    </UModal>
-
-    <UModal v-model:open="exportOpen" title="Export private key">
-      <template #body>
-        <form id="export-form" class="flex flex-col gap-3" @submit.prevent="exportKey">
-          <p class="text-sm text-muted">
-            Writes <span class="font-mono">{{ selected?.name }}</span> and its
-            <span class="font-mono">.pub</span> to your Downloads folder, unencrypted. Enter your
-            master password to continue.
-          </p>
-          <UFormField label="Master password">
-            <UInput v-model="exportPassword" type="password" required autofocus class="w-full" />
-          </UFormField>
-        </form>
-      </template>
-      <template #footer>
-        <UButton
-          type="submit"
-          form="export-form"
-          label="Export"
-          color="error"
-          :loading="exporting"
         />
       </template>
     </UModal>

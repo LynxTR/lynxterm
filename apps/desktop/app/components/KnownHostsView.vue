@@ -95,16 +95,19 @@ async function forget() {
       <div class="grid grid-cols-[repeat(auto-fit,minmax(min(320px,100%),1fr))] gap-4">
         <div class="flex flex-col gap-2 card p-4">
           <p class="t-label">Fingerprint</p>
-          <p class="font-mono text-xs break-all">{{ selected.fingerprint }}</p>
+          <CopyText
+            :text="selected.fingerprint"
+            what="Fingerprint"
+            class="font-mono text-xs break-all"
+          />
           <p class="t-label pt-2">Aliases</p>
           <div class="flex flex-wrap gap-1.5">
-            <UBadge
-              v-for="a in selected.hosts ? selected.hosts.split(',') : ['hashed']"
-              :key="a"
-              :label="maskHost(a)"
-              size="sm"
-              class="font-mono"
-            />
+            <template v-if="selected.hosts">
+              <CopyText v-for="a in selected.hosts.split(',')" :key="a" :text="a" what="Alias">
+                <UBadge :label="maskHost(a)" size="sm" class="font-mono" />
+              </CopyText>
+            </template>
+            <UBadge v-else label="hashed" size="sm" class="font-mono" />
           </div>
           <p class="t-label pt-2">File</p>
           <p class="flex items-center gap-2 font-mono text-xs">

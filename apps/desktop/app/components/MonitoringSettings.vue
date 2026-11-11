@@ -3,13 +3,11 @@ const settings = useSettings();
 const m = settings.monitoring;
 const { hosts } = useHosts();
 
-const showAll = ref(false);
-const listed = computed(() => {
-  const sorted = hosts.value.toSorted(
+const listed = computed(() =>
+  hosts.value.toSorted(
     (a, b) => Number(isWatched(b)) - Number(isWatched(a)) || hostName(a).localeCompare(hostName(b)),
-  );
-  return showAll.value ? sorted : sorted.slice(0, 6);
-});
+  ),
+);
 const watchedCount = computed(() => hosts.value.filter(isWatched).length);
 
 const overrideHosts = computed(() =>
@@ -72,7 +70,7 @@ async function setNotify(on: boolean) {
           Each login shows in the server's auth logs and keeps one sshd (about 5 MB).
         </span>
       </div>
-      <ul class="card divide-y divide-default">
+      <ul class="max-h-[19rem] overflow-y-auto card divide-y divide-default">
         <li v-for="h in listed" :key="h.id" class="flex min-h-12 items-center gap-3 px-4 py-2">
           <USwitch
             :model-value="isWatched(h)"
@@ -99,14 +97,6 @@ async function setNotify(on: boolean) {
           />
         </li>
         <li v-if="!hosts.length" class="px-4 py-3 text-sm text-muted">No saved hosts yet.</li>
-        <li v-if="hosts.length > 6" class="flex justify-center py-1.5">
-          <UButton
-            :label="showAll ? 'Show fewer' : `Show all ${hosts.length}`"
-            size="xs"
-            variant="link"
-            @click="showAll = !showAll"
-          />
-        </li>
       </ul>
     </section>
 

@@ -75,6 +75,8 @@ export default defineNuxtPlugin(() => {
       ? []
       : [key("k1", "deploy-2026", 1795), key("k2", "homelab", 1802), key("k3", "github", 0)],
     keys_scan: ["~/.ssh/id_ed25519", "~/.ssh/id_rsa"],
+    key_export: "~/Downloads/deploy-2026",
+    host_password_reveal: "correct-horse-battery",
     key_generate: ({ name }: { name: string }) => {
       const id = `k${Date.now()}`;
       (data.keys_list as Item[]).push(key(id, name, 0));
@@ -273,8 +275,7 @@ export default defineNuxtPlugin(() => {
       const prompt =
         "\x1b[30;44m \uf07c ~/app \x1b[34;43m\ue0b0\x1b[30m \ue725 main \x1b[0;33m\ue0b0" +
         "\x1b[0m  via \x1b[33m\ue718 v20.16.0\x1b[0m\r\n\x1b[32m\u276f\x1b[0m ";
-      const hooked = (end: string) =>
-        end + osc("633;P;Branch=main") + `${osc("133;A")}${prompt}${osc("133;B")}`;
+      const hooked = (end: string) => `${end}${osc("133;A")}${prompt}${osc("133;B")}`;
       let setUp = false;
       let line = "";
       const id = shells.length + 1;

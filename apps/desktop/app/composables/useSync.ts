@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { useLocalStorage } from "@vueuse/core";
+import { formatTimeAgo, useLocalStorage } from "@vueuse/core";
 
 /** Groups and port forwards point at hosts, so travel with them. */
 export const SYNC_SECTIONS = [
@@ -53,12 +53,12 @@ export const SYNC_EVERY = [
 const every = (s: Section) => (useSettings().syncEvery as Record<string, number>)[s.id] ?? 60;
 const isDue = (s: Section) => !isOff(s) && Date.now() >= (nextAt.value[s.id] ?? 0);
 
-const IDLE_AFTER = 15 * 60_000;
+// Capture: xterm stops keydown bubbling, so useIdle misses terminal typing.
 let lastInput = Date.now();
 const markActive = () => (lastInput = Date.now());
 addEventListener("keydown", markActive, { capture: true, passive: true });
 addEventListener("pointerdown", markActive, { capture: true, passive: true });
-const active = () => document.hasFocus() && Date.now() - lastInput < IDLE_AFTER;
+const active = () => document.hasFocus() && Date.now() - lastInput < 15 * 60_000;
 
 const reload = () =>
   Promise.all([
@@ -157,17 +157,9 @@ async function setEvery(s: Section, minutes: number) {
   else if (!minutes) await setSkipped([...others, ...s.kinds]);
 }
 
-const relative = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-export function fromNow(ms: number) {
-  const minutes = Math.round(ms / MINUTE);
-  if (Math.abs(minutes) < 60) return relative.format(minutes, "minute");
-  if (Math.abs(minutes) < 24 * 60) return relative.format(Math.round(minutes / 60), "hour");
-  return relative.format(Math.round(minutes / 1440), "day");
-}
-
 function nextIn(s: Section) {
   const ms = (nextAt.value[s.id] ?? 0) - now.value;
-  return ms <= 0 ? "now" : fromNow(Math.max(ms, MINUTE));
+  return ms <= 0 ? "now" : formatTimeAgo(new Date(now.value + Math.max(ms, MINUTE)), {}, now.value);
 }
 
 async function tick() {
@@ -217,11 +209,9 @@ const state = computed(() => {
   return "ok";
 });
 
-const ago = computed(() => {
-  if (!lastSync.value) return "not yet";
-  const ms = lastSync.value - now.value;
-  return ms > -MINUTE ? "just now" : fromNow(ms);
-});
+const ago = computed(() =>
+  lastSync.value ? formatTimeAgo(new Date(lastSync.value), {}, now.value) : "not yet",
+);
 
 const host = computed(() => url.value?.replace(/^https?:\/\//, "") ?? "");
 

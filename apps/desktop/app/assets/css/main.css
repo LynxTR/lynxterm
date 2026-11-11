@@ -9,17 +9,6 @@
   unicode-range: U+23FB-23FE, U+2665, U+26A1, U+2B58, U+E000-F8FF, U+F0000-FFFFD;
 }
 
-.lt-out {
-  font:
-    13px / var(--row) "JetBrains Mono",
-    "Symbols Nerd Font Mono",
-    monospace;
-  letter-spacing: var(--gap);
-  color: #c9d1d9;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
 @keyframes lt-blink {
   50% {
     opacity: 0;
@@ -87,9 +76,6 @@
 }
 @utility hint {
   @apply flex items-center gap-2 text-sm text-muted;
-}
-@utility card-head {
-  @apply sticky top-0 z-[1] flex h-7 items-center gap-3 rounded-t-[10px] bg-sunken px-3 text-[11px] text-dimmed;
 }
 @utility code-gutter {
   @apply w-10 shrink-0 pr-3 text-right whitespace-pre text-dimmed select-none;
@@ -161,6 +147,25 @@
 }
 :is(.stagger, .pane) > :nth-child(7) {
   animation-delay: 150ms;
+}
+.grow-enter-active,
+.grow-leave-active {
+  overflow: hidden;
+  transition: all 200ms var(--lt-ease);
+}
+.grow-leave-active {
+  transition-duration: 150ms;
+  transition-timing-function: ease-in;
+}
+.grow-enter-from,
+.grow-leave-to {
+  max-width: 0;
+  padding-inline: 0;
+  opacity: 0;
+}
+.grow-enter-to,
+.grow-leave-from {
+  max-width: 24rem;
 }
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -87,7 +87,7 @@ const block = computed(() =>
 );
 
 // 5m is live view: 2.5 s slots, filled by one-a-second live samples. Longer ranges use slots
-// of at least a minute, history's sample rate, so none sit empty.
+// of at least one minute, history's sample rate, so none sit empty.
 const ranges = [
   { label: "5m", seconds: 300 },
   { label: "1h", seconds: 3600 },
@@ -304,12 +304,7 @@ const shown = computed(() => [
             {{ latest ? `${latest.disk}%` : "–" }}
           </span>
         </div>
-        <div class="h-1.5 overflow-hidden rounded-full bg-accented">
-          <div
-            class="h-full rounded-full bg-success"
-            :style="{ width: `${Math.min(100, latest?.disk ?? 0)}%` }"
-          />
-        </div>
+        <UProgress :model-value="latest?.disk ?? 0" color="success" size="sm" />
         <div class="mt-auto flex flex-wrap gap-1.5 pt-1">
           <UBadge
             v-if="latest?.load !== undefined"

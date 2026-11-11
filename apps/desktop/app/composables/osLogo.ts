@@ -1,4 +1,3 @@
-// OS logo on brand color, keyed by /etc/os-release ID (metrics.rs reads it).
 // Icon names written in full so Nuxt Icon bundles them.
 type Logo = { icon: string; bg: string; dark?: boolean };
 

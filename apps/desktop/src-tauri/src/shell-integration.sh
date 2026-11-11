@@ -1,13 +1,12 @@
 # >>> lynxterm shell integration >>>
-# Prompt start/end (OSC 133), working directory (OSC 7): Lynxterm reads exact command
-# line, suggests completions. Exit status, git branch (OSC 633) feed command cards.
+# Prompt start/end (OSC 133), exit status, working directory (OSC 7): Lynxterm reads exact
+# command line, suggests completions.
 # To remove: delete everything between these two marker lines.
 case $- in *i*)
   # Keeps $? so prompt themes see real status.
   __lynxterm_keep() { __lynxterm_status=$?; return $__lynxterm_status; }
   __lynxterm_report() {
     printf '\033]133;D%s\007\033]7;file://%s%s\007' "${__lynxterm_ran:+;$__lynxterm_status}" "$1" "$PWD"
-    printf '\033]633;P;Branch=%s\007' "$(git symbolic-ref --short -q HEAD 2>/dev/null || git rev-parse --short HEAD 2>/dev/null)"
     __lynxterm_ran=
   }
   if [ -n "$BASH_VERSION" ]; then

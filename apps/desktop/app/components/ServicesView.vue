@@ -10,7 +10,7 @@ const { filter, shown: matching } = useFilter(
 );
 const shown = computed(() => matching.value.filter((s) => !isBuiltIn(s)));
 const { draft, submit } = useDraft(services, save, "Service saved");
-/** A built-in opens as a new draft: saving makes an own copy, never changes the built-in. */
+/** Built-in opens as new draft (no id): save makes own copy, built-in untouched. */
 const pick = (s: Service) =>
   (draft.value = { ...structuredClone(toRaw(s)), id: isBuiltIn(s) ? undefined : s.id });
 const EVERY = [
@@ -61,8 +61,6 @@ async function reset() {
 
 const SHARED_EXAMPLE = 'PKGS="docker-ce docker-ce-cli containerd.io"';
 const count = (text: string | undefined) => (text ?? "").split("\n").length;
-const rows = (body: string | undefined, example: string) => count(body || example);
-const numbers = (from: number, n: number) => Array.from({ length: n }, (_, i) => from + i);
 
 /** First body line of each part, as in serviceFile: line 1 shared comment, then per function
  *  header, body, closing. */
@@ -281,37 +279,20 @@ const mark = (n: number) =>
             </UFieldGroup>
           </div>
 
-          <div v-if="rawMode" class="flex">
-            <span class="code-gutter">
-              <span v-for="n in numbers(1, count(raw))" :key="n" class="block" :class="mark(n)">{{
-                n
-              }}</span>
-            </span>
-            <CodeArea v-model="raw" :rows="count(raw)" aria-label="Service file" />
-          </div>
+          <CodeArea v-if="rawMode" v-model="raw" :from="1" :mark aria-label="Service file" />
 
           <template v-else>
             <div class="code-lock">
               <span class="code-gutter" :class="mark(1)">1</span>
               <span>{{ SHARED_LINE }}</span>
             </div>
-            <div class="flex">
-              <span class="code-gutter">
-                <span
-                  v-for="n in numbers(at.shared!, count(draft.shared))"
-                  :key="n"
-                  class="block"
-                  :class="mark(n)"
-                  >{{ n }}</span
-                >
-              </span>
-              <CodeArea
-                v-model="draft.shared"
-                :rows="rows(draft.shared, SHARED_EXAMPLE)"
-                :placeholder="SHARED_EXAMPLE"
-                aria-label="Shared code"
-              />
-            </div>
+            <CodeArea
+              v-model="draft.shared"
+              :from="at.shared!"
+              :mark
+              :placeholder="SHARED_EXAMPLE"
+              aria-label="Shared code"
+            />
 
             <template v-for="f in SERVICE_FUNCTIONS" :key="f.name">
               <template v-if="draft.functions[f.name] !== undefined">
@@ -362,25 +343,15 @@ const mark = (n: number) =>
                     class="flex-1 font-sans"
                   />
                 </div>
-                <div class="flex">
-                  <span class="code-gutter">
-                    <span
-                      v-for="n in numbers(at[f.name]!, count(draft.functions[f.name]))"
-                      :key="n"
-                      class="block"
-                      :class="mark(n)"
-                      >{{ n }}</span
-                    >
-                  </span>
-                  <CodeArea
-                    v-model="draft.functions[f.name]"
-                    :data-fn="f.name"
-                    :rows="rows(draft.functions[f.name], f.example)"
-                    :placeholder="f.example"
-                    :aria-label="`${f.name} body`"
-                    indent
-                  />
-                </div>
+                <CodeArea
+                  v-model="draft.functions[f.name]"
+                  :from="at[f.name]!"
+                  :mark
+                  :data-fn="f.name"
+                  :placeholder="f.example"
+                  :aria-label="`${f.name} body`"
+                  indent
+                />
                 <div class="code-lock">
                   <span
                     class="code-gutter"

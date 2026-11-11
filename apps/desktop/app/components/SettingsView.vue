@@ -11,6 +11,14 @@ const sections = [
 ] as const;
 
 const { current, available, system, state } = useUpdates();
+const navItems = computed(() =>
+  sections.map((s) => ({
+    label: s.label,
+    active: section.value === s.id,
+    badge: s.id === "about" && available.value ? "Update" : undefined,
+    onSelect: () => (section.value = s.id),
+  })),
+);
 const updateLine = computed(() => {
   if (state.value === "checking") return "Checking GitHub for a new release…";
   if (state.value === "done") return `You have the latest version for ${system.value}.`;
@@ -23,27 +31,16 @@ const updateLine = computed(() => {
 
 <template>
   <div class="flex min-h-0">
-    <nav
-      aria-label="Settings sections"
-      class="flex w-[220px] shrink-0 flex-col gap-0.5 overflow-y-auto border-r border-default px-3 py-5"
-    >
+    <div class="flex w-[220px] shrink-0 flex-col overflow-y-auto border-r border-default px-3 py-5">
       <span class="t-label px-3.5 pb-2.5">Settings</span>
-      <button
-        v-for="s in sections"
-        :key="s.id"
-        class="flex h-10 items-center rounded-md px-3.5 text-left transition-colors"
-        :class="section === s.id ? 'bg-accented text-default' : 'text-toned hover:bg-elevated'"
-        :aria-current="section === s.id ? 'page' : undefined"
-        @click="section = s.id"
-      >
-        {{ s.label }}
-        <span
-          v-if="s.id === 'about' && available"
-          class="ml-auto size-2 rounded-full bg-primary"
-          aria-label="Update available"
-        />
-      </button>
-    </nav>
+      <UNavigationMenu
+        :items="navItems"
+        orientation="vertical"
+        color="neutral"
+        aria-label="Settings sections"
+        :ui="{ link: 'h-10 px-3.5 font-normal' }"
+      />
+    </div>
 
     <main
       :key="section"

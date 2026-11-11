@@ -1,7 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
 
-// Commands per host (user@host:port), oldest first. Recorded and suggested only while setting
-// on; stored encrypted in vault, so syncs.
 const byHost = reactive(new Map<string, string[]>());
 const saveTimers = new Map<string, ReturnType<typeof setTimeout>>();
 

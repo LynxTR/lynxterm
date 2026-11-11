@@ -6,7 +6,7 @@ export type SavedHost = Omit<SshTarget, "password"> & {
   group?: string;
   os?: string;
   tags?: string[];
-  /** Password in vault; value never leaves Rust. */
+  /** Password in vault; value only via host_password_reveal. */
   savedPassword?: boolean;
 };
 
@@ -33,8 +33,8 @@ export const hostItems = computed(() =>
 export const savedHost = (h: { user: string; host: string; port: number }) =>
   hosts.value.find((x) => hostKey(x) === hostKey(h));
 
-export const hostLabel = (h: { user: string; host: string; port: number }) =>
-  `${h.user}@${maskHost(h.host)}${h.port === 22 ? "" : `:${h.port}`}`;
+export const hostLabel = (h: { user: string; host: string; port: number }, mask = true) =>
+  `${h.user}@${mask ? maskHost(h.host) : h.host}${h.port === 22 ? "" : `:${h.port}`}`;
 
 export function parseTarget(text: string) {
   const m = text.trim().match(/^(?:ssh\s+)?([^\s@]+)@([^\s@:]+)(?::(\d{1,5}))?$/);

@@ -7,8 +7,6 @@ function setCustom(m: Metric, on: boolean | "indeterminate") {
   if (on === true) rules.value[m] = { ...props.inherit![m] };
   else delete rules.value[m];
 }
-const num = (v: string | number) => Math.max(0, Number(v) || 0);
-
 type Field = {
   key: "above" | "for" | "clear";
   label: string;
@@ -16,20 +14,13 @@ type Field = {
   min: number;
   max?: number;
   step?: number;
-  clamp: (v: number) => number;
 };
 function cells(m: (typeof METRICS)[number]): (Field | string)[] {
   const r = ruleOf(m.id);
   if (m.id === "unreachable")
     return [
       "no answer",
-      {
-        key: "for",
-        label: "after minutes",
-        unit: "min",
-        min: 1,
-        clamp: (v) => Math.max(1, v),
-      },
+      { key: "for", label: "after minutes", unit: "min", min: 1 },
       "first good sample",
     ];
   const step = m.id === "load" ? 0.1 : 1;
@@ -42,23 +33,9 @@ function cells(m: (typeof METRICS)[number]): (Field | string)[] {
       min: step,
       max: percent ? 100 : undefined,
       step,
-      clamp: (v) => (percent ? Math.min(100, v) : v),
     },
-    {
-      key: "for",
-      label: "for minutes",
-      unit: r.for ? "min" : "at once",
-      min: 0,
-      clamp: (v) => v,
-    },
-    {
-      key: "clear",
-      label: "clears below",
-      unit: m.unit,
-      min: 0,
-      step,
-      clamp: (v) => Math.min(r.above, v),
-    },
+    { key: "for", label: "for minutes", unit: r.for ? "min" : "at once", min: 0 },
+    { key: "clear", label: "clears below", unit: m.unit, min: 0, max: r.above, step },
   ];
 }
 </script>
@@ -102,18 +79,19 @@ function cells(m: (typeof METRICS)[number]): (Field | string)[] {
           <td v-for="c in cells(m)" :key="typeof c === 'string' ? c : c.key" class="px-3 py-2">
             <span v-if="typeof c === 'string'" class="text-xs text-muted">{{ c }}</span>
             <span v-else class="flex items-center gap-1.5">
-              <UInput
+              <UInputNumber
                 :model-value="ruleOf(m.id)[c.key]"
-                type="number"
                 :min="c.min"
                 :max="c.max"
                 :step="c.step"
+                :increment="false"
+                :decrement="false"
                 size="sm"
                 class="w-20"
                 :disabled="(inherit && !rules[m.id]) || !ruleOf(m.id).on"
                 :aria-label="`${m.label} ${c.label}`"
                 :ui="{ base: 'font-mono text-right' }"
-                @update:model-value="rules[m.id]![c.key] = c.clamp(num($event))"
+                @update:model-value="rules[m.id]![c.key] = $event ?? c.min"
               />
               <span class="text-xs text-muted">{{ c.unit }}</span>
             </span>

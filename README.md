@@ -10,7 +10,6 @@ An open-source SSH client with an encrypted vault that syncs through a Cloudflar
 ## Features
 
 - SSH terminal with tabs and split panes, SFTP, snippets and port forwarding
-- Each command in its own block with exit code, time and git branch, through optional shell integration
 - Live server monitoring (CPU, memory, disk, load, network) with alert rules
 - Hosts, groups, keys, known hosts and command history, all in one encrypted vault
 - Imports hosts from `~/.ssh/config`, generates keys and installs them on your servers
@@ -20,7 +19,7 @@ An open-source SSH client with an encrypted vault that syncs through a Cloudflar
 
 <table>
   <tr>
-    <td><img src="docs/screenshots/terminal.webp" alt="Terminal with command blocks and the monitor panel"></td>
+    <td><img src="docs/screenshots/terminal.webp" alt="Terminal with the monitor panel"></td>
     <td><img src="docs/screenshots/keychain.webp" alt="Keychain"></td>
   </tr>
   <tr>

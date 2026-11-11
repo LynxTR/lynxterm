@@ -95,7 +95,7 @@ const navItems = computed(() =>
   })),
 );
 
-// Inside terminal Ctrl+K is the shell's, so there Ctrl+Shift+K.
+// Inside terminal Ctrl+K is shell's: Ctrl+Shift+K there.
 const paletteOpen = ref(false);
 const term = ref("");
 const quickTarget = computed(() => parseTarget(term.value));
@@ -176,33 +176,6 @@ const tabBarColor = computed(() => {
   const tab = tabs.value.find((t) => t.key === current.value);
   return groupColor(tab?.panes[0]?.target.group) || "var(--ui-border-accented)";
 });
-function sizeTab(el: Element, open: boolean, done: () => void) {
-  const e = el as HTMLElement;
-  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return done();
-  const style = getComputedStyle(e);
-  const full = {
-    width: `${e.offsetWidth}px`,
-    paddingLeft: style.paddingLeft,
-    paddingRight: style.paddingRight,
-    opacity: 1,
-  };
-  const none = { width: "0px", paddingLeft: "0px", paddingRight: "0px", opacity: 0 };
-  e.style.overflow = "hidden";
-  const animation = e.animate(open ? [none, full] : [full, none], {
-    duration: open ? 200 : 150,
-    easing: open ? "cubic-bezier(0.2, 0.8, 0.2, 1)" : "ease-in",
-  });
-  let finished = false;
-  const finish = () => {
-    if (finished) return;
-    finished = true;
-    e.style.overflow = "";
-    done();
-    measureTabBar();
-  };
-  animation.onfinish = finish;
-  setTimeout(finish, 400); // no paint, no finish event: closed tab must still go
-}
 const navBox = useTemplateRef<HTMLElement>("navBox");
 const { box: navMark } = useIndicator(navBox, view, ".nav-active");
 
@@ -318,9 +291,9 @@ const syncDot = computed(
               @scroll="measureTabBar"
             >
               <TransitionGroup
-                :css="false"
-                @enter="(el, done) => sizeTab(el, true, done)"
-                @leave="(el, done) => sizeTab(el, false, done)"
+                name="grow"
+                @after-enter="measureTabBar"
+                @after-leave="measureTabBar"
               >
                 <div
                   v-for="t in tabs"

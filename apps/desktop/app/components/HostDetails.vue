@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { invoke } from "@tauri-apps/api/core";
+import { formatTimeAgo } from "@vueuse/core";
 import type { DropdownMenuItem } from "@nuxt/ui";
 // Explicit (not auto-imported): defineProps resolves only imported types to runtime Object.
 import type { SavedHost } from "~/composables/useHosts";
@@ -48,28 +49,13 @@ async function forgetPassword() {
   await useHosts().refresh();
 }
 
-// Master password first, like key export. Hidden again on eye or other host.
-const revealOpen = ref(false);
-const master = ref("");
 const shown = ref("");
 const revealing = ref(false);
-watch(
-  () => props.host.id,
-  () => (shown.value = ""),
-);
-async function revealPassword() {
-  const { host, port, user } = props.host;
-  await withBusy(revealing, async () => {
-    shown.value = await invoke<string>("host_password_reveal", {
-      host,
-      port,
-      user,
-      master: master.value,
-    });
-    revealOpen.value = false;
+const revealPassword = () =>
+  withBusy(revealing, async () => {
+    const { host, port, user } = props.host;
+    shown.value = await invoke<string>("host_password_reveal", { host, port, user });
   });
-  master.value = "";
-}
 
 const keyName = computed(() => keys.value.find((k) => k.id === props.host.keyId)?.name);
 /** ~/.ssh/known_hosts line under host's name; none if names hashed. */
@@ -153,7 +139,7 @@ const installMenu = computed(() => [
       onSelect: () => runAction(props.host, s, "install"),
     })),
 ]);
-// Keyed on ids: a saved copy replacing a built-in of the same name is a new id, same length.
+// Keyed on ids: own copy replacing same-name built-in is new id, same length.
 watch(
   () => [props.host.id, available.value.map((s) => s.id).join()],
   () => {
@@ -185,8 +171,7 @@ function actionsFor(s: Service) {
     ...(has("logs") ? [act("logs", "Logs")] : []),
   ];
 }
-/** Upgrade here too when no update was detected (a runtime's installer always fetches the
- *  newest), and Uninstall. */
+/** Upgrade even with no update detected (runtime installers fetch newest), and Uninstall. */
 const moreFor = (s: Service) => {
   const r = results.value[s.id!];
   const keyOnly = s.name === keyOnlyName;
@@ -230,12 +215,12 @@ async function loadActivity() {
 }
 watch([() => hostKey(props.host), activityVersion], loadActivity, { immediate: true });
 
-function when(at: number) {
-  const ms = at * 1000 - Date.now();
-  if (ms > -60_000) return "just now";
-  if (ms > -7 * 86_400_000) return fromNow(ms);
-  return new Date(at * 1000).toLocaleDateString([], { month: "short", day: "numeric" });
-}
+const when = (at: number) =>
+  // Clamped: other device's clock ahead must not read "in 2 minutes".
+  formatTimeAgo(new Date(Math.min(at * 1000, Date.now())), {
+    max: 7 * 86_400_000,
+    fullDateFormatter: (d) => d.toLocaleDateString([], { month: "short", day: "numeric" }),
+  });
 </script>
 
 <template>
@@ -248,7 +233,12 @@ function when(at: number) {
           <HostChip v-if="host.group" :label="host.group" :group="host.group" />
           <UBadge :label="status.label" size="sm" class="font-mono" :class="status.tone" />
         </div>
-        <p class="truncate font-mono text-xs text-muted">{{ hostLabel(host) }}</p>
+        <CopyText
+          :text="hostLabel(host, false)"
+          what="Address"
+          class="block truncate font-mono text-xs text-muted"
+          >{{ hostLabel(host) }}</CopyText
+        >
       </div>
       <div class="flex items-center gap-1.5">
         <UButton
@@ -294,7 +284,11 @@ function when(at: number) {
         <span class="t-label">Details</span>
         <dl class="grid grid-cols-[110px_minmax(0,1fr)] items-center gap-x-3.5 gap-y-2 text-sm">
           <dt class="text-muted">Address</dt>
-          <dd class="truncate font-mono text-xs">{{ hostLabel(host) }}</dd>
+          <dd class="min-w-0 font-mono text-xs">
+            <CopyText :text="hostLabel(host, false)" what="Address" class="truncate">{{
+              hostLabel(host)
+            }}</CopyText>
+          </dd>
           <dt class="text-muted">Sign in with</dt>
           <dd v-if="keyName">Key {{ keyName }}</dd>
           <template v-else-if="host.savedPassword">
@@ -323,7 +317,8 @@ function when(at: number) {
                     size="xs"
                     variant="link"
                     :aria-label="shown ? 'Hide password' : 'Show password'"
-                    @click="shown ? (shown = '') : ((revealOpen = true), (master = ''))"
+                    :loading="revealing"
+                    @click="shown ? (shown = '') : revealPassword()"
                   />
                   <UButton
                     icon="i-ph-trash-duotone"
@@ -367,7 +362,9 @@ function when(at: number) {
           </dd>
           <template v-if="hostKeyLine">
             <dt class="text-muted">Host key</dt>
-            <dd class="truncate font-mono text-xs text-toned">{{ hostKeyLine.fingerprint }}</dd>
+            <dd class="min-w-0 font-mono text-xs text-toned">
+              <CopyText :text="hostKeyLine.fingerprint" what="Fingerprint" class="truncate" />
+            </dd>
           </template>
         </dl>
       </section>
@@ -513,30 +510,6 @@ function when(at: number) {
         </li>
       </ol>
     </section>
-
-    <UModal v-model:open="revealOpen" :title="`Show password for ${hostName(host)}`">
-      <template #body>
-        <form id="reveal-form" class="flex flex-col gap-3" @submit.prevent="revealPassword">
-          <p class="text-sm text-muted">
-            Enter your master password to see the saved password for
-            <span class="font-mono">{{ hostLabel(host) }}</span
-            >.
-          </p>
-          <UFormField label="Master password">
-            <UInput v-model="master" type="password" required autofocus class="w-full" />
-          </UFormField>
-        </form>
-      </template>
-      <template #footer>
-        <UButton
-          color="primary"
-          type="submit"
-          form="reveal-form"
-          label="Show"
-          :loading="revealing"
-        />
-      </template>
-    </UModal>
 
     <UModal v-model:open="switchOpen" :title="`Sign in to ${hostName(host)} with a key`">
       <template #body>

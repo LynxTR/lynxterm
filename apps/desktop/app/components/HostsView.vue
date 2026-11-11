@@ -25,7 +25,7 @@ function toggleWatch(h: SavedHost) {
 }
 
 const list = useTemplateRef<{ focus: () => void }>("list");
-// Newline between fields: a one-line query never matches across two.
+// Newline between fields: one-line query never matches across two.
 const { filter, shown: byText } = useFilter(
   () => hosts.value,
   (h) => [h.name, h.host, h.user, h.group, ...(h.tags ?? [])].join("\n"),
@@ -47,25 +47,9 @@ const present = computed(() =>
     .map((name) => ({ name, count: byText.value.filter((h) => h.group === name).length }))
     .filter((g) => g.count),
 );
-const chips = computed(() =>
-  present.value.length > 4 ? present.value.slice(0, 3) : present.value,
-);
-const hidden = computed(() => present.value.slice(chips.value.length));
-const pickedHidden = computed(() => hidden.value.find((g) => g.name === group.value));
-const moreMenu = computed(() => [
-  hidden.value.map((g) => ({
-    label: `${g.name}  ${g.count}`,
-    icon: group.value === g.name ? "i-ph-check" : undefined,
-    onSelect: () => (group.value = g.name),
-  })),
-]);
 watch(groups, (list) => {
   if (group.value && !list.includes(group.value)) group.value = null;
 });
-const chip = (on: boolean) => [
-  "h-7 gap-1.5 rounded-full px-3 text-xs",
-  on ? "font-semibold" : "bg-muted font-normal text-toned",
-];
 
 defineShortcuts({
   "/": () => view.value === "hosts" && list.value?.focus(),
@@ -222,32 +206,20 @@ const hostMenu = (h: SavedHost) => [
       <template v-if="present.length" #filters>
         <div role="group" aria-label="Show group" class="flex flex-wrap gap-1.5">
           <UButton
-            v-for="g in [{ name: null, count: byText.length }, ...chips]"
+            v-for="g in [{ name: null, count: byText.length }, ...present]"
             :key="g.name ?? ''"
             size="xs"
             :color="group === g.name ? 'primary' : 'neutral'"
             :variant="group === g.name ? 'solid' : 'outline'"
-            :class="chip(group === g.name)"
+            :class="[
+              'h-7 gap-1.5 rounded-full px-3 text-xs',
+              group === g.name ? 'font-semibold' : 'bg-muted font-normal text-toned',
+            ]"
             :aria-pressed="group === g.name"
             @click="group = group === g.name ? null : g.name"
           >
             {{ g.name ?? "All" }} <span class="opacity-75">{{ g.count }}</span>
           </UButton>
-          <UDropdownMenu v-if="hidden.length" :items="moreMenu" :content="{ align: 'start' }">
-            <UButton
-              size="xs"
-              :color="pickedHidden ? 'primary' : 'neutral'"
-              :variant="pickedHidden ? 'solid' : 'outline'"
-              :class="chip(!!pickedHidden)"
-              trailing-icon="i-ph-caret-down"
-            >
-              {{
-                pickedHidden
-                  ? `${pickedHidden.name} ${pickedHidden.count}`
-                  : `+${hidden.length} more`
-              }}
-            </UButton>
-          </UDropdownMenu>
         </div>
       </template>
 

@@ -3,19 +3,29 @@ import { localEcho } from "../app/composables/localEcho";
 
 function setup(prompt: string, unsafe = false) {
   const row: string[] = [...prompt];
+  let cursor = row.length;
   const echo = localEcho({
     cols: 80,
-    cursor: () => ({ x: row.length, y: 0 }),
+    cursor: () => ({ x: cursor, y: 0 }),
     cell: (x) => row[x] ?? "",
     restBlank: () => true,
     unsafe: () => unsafe,
   });
   const server = (text: string, at: number) => {
     row.splice(at, text.length, ...text);
+    cursor = at + text.length;
     echo.settle();
   };
-  return { echo, server };
+  // Shell's backspace echo: "\b \b"
+  const erase = (at: number) => {
+    row[at] = " ";
+    cursor = at;
+    echo.settle();
+  };
+  return { echo, server, erase };
 }
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 test("grey only after server echoed a key on this line, then confirmed away", async () => {
   const { echo, server } = setup("$ ");
@@ -76,4 +86,46 @@ test("Enter keeps grey and waits till server moves cursor", async () => {
   server("\n", 4);
   expect(echo.waiting()).toBe(false);
   expect(echo.pending.text).toBe("");
+});
+
+test("fast typing and deleting: server replay stays under guess", async () => {
+  const { echo, server, erase } = setup("$ ");
+  echo.key("a");
+  await sleep(40);
+  server("a", 2);
+  for (const k of ["b", "c", "\x7f", "\x7f", "x"]) echo.key(k);
+  expect(echo.visible()).toBe(true);
+  expect(echo.pending.behind).toBe(true); // suggestions wait: screen line is stale
+  expect(echo.pending).toMatchObject({ x: 3, text: "x" });
+  await sleep(40);
+  // Server replays every key: b, c, two erases, x. Screen never flashes deleted chars.
+  server("b", 3);
+  expect(echo.pending).toMatchObject({ x: 3, text: "x" });
+  server("c", 4);
+  expect(echo.visible()).toBe(true);
+  expect(echo.pending.cover).toBe(true);
+  erase(4);
+  erase(3);
+  expect(echo.pending).toMatchObject({ x: 3, text: "x" });
+  server("x", 3);
+  expect(echo.visible()).toBe(false);
+  expect(echo.pending.behind).toBe(false);
+});
+
+test("deleting echoed text hides it at once, typing after lands right", async () => {
+  const { echo, server, erase } = setup("$ ");
+  echo.key("l");
+  await sleep(40);
+  server("l", 2);
+  echo.key("s");
+  await sleep(40);
+  server("s", 3);
+  echo.key("\x7f");
+  echo.key("\x7f");
+  echo.key("w");
+  expect(echo.pending).toMatchObject({ x: 2, text: "w" });
+  erase(3);
+  erase(2);
+  server("w", 2);
+  expect(echo.visible()).toBe(false);
 });

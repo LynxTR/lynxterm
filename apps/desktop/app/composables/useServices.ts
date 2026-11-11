@@ -97,9 +97,8 @@ export async function checkHost(h: SavedHost, only?: (s: Service) => boolean) {
   return done;
 }
 
-/** Install, fix, upgrade, logs, uninstall: in a new terminal tab, where sudo can ask. Install,
- *  upgrade and fix change the server: preflight first when LynxTerm can (blocked stops,
- *  warnings ask). Uninstall always asks. */
+/** Runs in new terminal tab, where sudo can ask. Install, upgrade, fix: preflight first when
+ *  present (blocked stops, warnings ask). Uninstall always asks. */
 export async function runAction(h: SavedHost, s: Service, fn: ServiceFunction) {
   const toast = useToast();
   const changes = fn === "install" || fn === "upgrade" || fn === "fix";
@@ -153,8 +152,8 @@ export async function runAction(h: SavedHost, s: Service, fn: ServiceFunction) {
       if (!started) return;
       logActivity(h, { kind: "service", title: `Ran ${fn} of ${s.name}` });
       void (async () => {
-        // Key hosts: check once over a new connection. ssh.sh takes it as proof the key
-        // still gets in; without it the server undoes key-only by itself.
+        // Key hosts: check once over new connection. ssh.sh takes it as proof key still gets
+        // in; without it server undoes key-only by itself.
         if (h.keyId && s.functions.check !== undefined) {
           let failed: unknown;
           // Three tries: sshd may still be reloading.
@@ -238,7 +237,7 @@ export function startServiceChecks() {
     },
   );
 
-  // ponytail: app-side timer, nothing runs while LynxTerm is closed; a cron job on the server
+  // ponytail: app-side timer, nothing runs while LynxTerm closed; server cron job
   // if that matters.
   setInterval(() => {
     for (const h of useHosts().hosts.value) {

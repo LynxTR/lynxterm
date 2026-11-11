@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Terminal, type IMarker } from "@xterm/xterm";
+import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import { useDebounceFn, useResizeObserver } from "@vueuse/core";
@@ -29,7 +29,6 @@ const emit = defineEmits<{
   close: [];
 }>();
 const el = useTemplateRef("el");
-const scroller = useTemplateRef("scroller");
 const error = ref("");
 const unknownHost = ref("");
 const state = ref<SessionState>("connecting");
@@ -52,10 +51,25 @@ const term = new Terminal({
   scrollback: 10_000,
   theme: {
     background: token("--ui-bg", "#0b0d10"),
-    foreground: FOREGROUND,
+    foreground: "#c9d1d9",
     cursor: "#00000000",
     selectionBackground: `${token("--ui-primary", "#ffb020")}40`,
-    ...ANSI,
+    black: "#2e3440",
+    red: "#ff8a8a",
+    green: "#3ddc97",
+    yellow: "#ffb020",
+    blue: "#6cb6ff",
+    magenta: "#c792ea",
+    cyan: "#5eead4",
+    white: "#c9d1d9",
+    brightBlack: "#7c8594",
+    brightRed: "#ffa8a8",
+    brightGreen: "#6ee7b7",
+    brightYellow: "#ffc95c",
+    brightBlue: "#93c9ff",
+    brightMagenta: "#ddb6f2",
+    brightCyan: "#99f6e4",
+    brightWhite: "#f4f5f7",
     scrollbarSliderBackground: "#ffffff14",
     scrollbarSliderHoverBackground: "#ffffff26",
     scrollbarSliderActiveBackground: "#ffffff33",
@@ -76,7 +90,6 @@ const { record, suggest } = useHistory();
 const historyKey = hostKey(props.target);
 const commands = ref<string[]>([]);
 const integrated = ref(false);
-const cwd = ref("");
 const ghost = reactive({
   line: "",
   list: [] as Completion[],
@@ -86,12 +99,13 @@ const ghost = reactive({
   left: 0,
   top: 0,
 });
+// Keys not yet on screen: line read from it is stale, so no suggestion till server catches up.
 const rest = computed(() => {
   const full = ghost.list[ghost.pick]?.text ?? "";
-  const typed = ghost.line + pending.text;
-  return full.startsWith(typed) ? full.slice(typed.length) : "";
+  if (pending.behind || !full.startsWith(ghost.line)) return "";
+  return full.slice(ghost.line.length);
 });
-const menu = computed(() => ghost.open && ghost.list.length > 1);
+const menu = computed(() => !!rest.value && ghost.open && ghost.list.length > 1);
 const word = computed(() => ghost.line.slice(ghost.line.lastIndexOf(" ") + 1));
 let promptStart: { x: number; y: number } | null = null; // absolute cell after prompt
 let typed = "";
@@ -116,141 +130,30 @@ function readLine(start: { x: number; y: number }, toCursor = false) {
 }
 
 const settings = useSettings();
-const plain = settings.terminalStyle !== "blocks";
 term.parser.registerOscHandler(133, (data) => {
   // Markers before our own setup: hooks are in server's shell files.
   if (setup !== "done" && !settings.integratedHosts.includes(historyKey))
     settings.integratedHosts.push(historyKey);
   integrated.value = true;
   const b = term.buffer.active;
-  const l = live.value;
-  if (data[0] === "A") {
-    // Fresh prompt only: redraws (resize, Ctrl+L, Tab) get no D first.
-    if (!fresh) return true;
-    if (b.type === "normal" && !plain) freeze();
-    reveal();
-    live.value = { at: mark(), branch: gitBranch, cwd: cwd.value };
-    fresh = false;
-  } else if (data[0] === "B") promptStart = { x: b.cursorX, y: b.baseY + b.cursorY };
-  else if (data[0] === "C") {
-    const command = promptStart ? readLine(promptStart) : "";
+  if (data[0] === "A") reveal();
+  else if (data[0] === "B") promptStart = { x: b.cursorX, y: b.baseY + b.cursorY };
+  else {
+    const command = data[0] === "C" && promptStart ? readLine(promptStart) : "";
     if (command) record(historyKey, command);
-    // cursor on first output line
-    Object.assign(l, { ran: true, command, start: Date.now(), out: mark() });
-    promptStart = null;
-  } else {
-    // "D;1": command just ended, with exit status
-    if (data.startsWith("D;") && l.ran && l.status === undefined)
-      Object.assign(l, { status: Number(data.slice(2)), ms: Date.now() - l.start! });
-    fresh = true;
     promptStart = null;
   }
   return true;
 });
-term.parser.registerOscHandler(7, (data) => {
-  try {
-    cwd.value = decodeURIComponent(new URL(data).pathname);
-  } catch {}
-  return true;
-});
 
-interface Card {
-  id: number;
-  html: string[]; // wrapped rows rejoined: cards reflow
-  text: string[];
-  outAt: number;
-  command?: string; // undefined: login/server message, no header
-  status?: number;
-  ms?: number;
-  start?: number;
-  branch: string;
-  cwd: string;
-}
-interface Live {
-  at?: IMarker;
-  out?: IMarker;
-  ran?: boolean;
-  command?: string;
-  start?: number;
-  status?: number;
-  ms?: number;
-  cleared?: boolean;
-  branch: string;
-  cwd: string;
-}
-// ponytail: count cap; cap by total lines if huge outputs hog memory
-const MAX_CARDS = 300;
-const cards = shallowRef<Card[]>([]);
-const live = ref<Live>({ branch: "", cwd: "" });
-let fresh = true; // D seen since last A: shell drawing new prompt
-let nextCard = 0;
-const mark = () => markRaw(term.registerMarker(0));
-const scratch = term.buffer.normal.getNullCell();
-let gitBranch = "";
 const alternate = ref(false);
 term.buffer.onBufferChange((b) => {
   alternate.value = b.type === "alternate";
   measure();
 });
 
-term.parser.registerOscHandler(633, (data) => {
-  if (data.startsWith("P;Branch=")) gitBranch = data.slice(9);
-  return true;
-});
-
-// `clear`, Ctrl+L: cards go too.
-term.parser.registerCsiHandler({ final: "J" }, (params) => {
-  if ((params[0] === 2 || params[0] === 3) && term.buffer.active.type === "normal") {
-    cards.value = [];
-    if (live.value.ran) live.value.cleared = true;
-  }
-  return false; // terminal still clears
-});
-
-function freeze() {
-  const b = term.buffer.normal;
-  const l = live.value;
-  const cursor = b.baseY + b.cursorY;
-  const outRow = l.out?.line ?? -1;
-  const inputRow = promptStart?.y ?? -1;
-  const { command, status, ms, start, branch } = l;
-  const card: Card = {
-    ...{ id: nextCard++, html: [], text: [], outAt: -1 },
-    ...{ command, status, ms, start, branch, cwd: l.cwd },
-  };
-  let extra = false;
-  // Marker trimmed off scrollback: line -1, start at top.
-  for (let y = Math.max(l.at?.line ?? 0, 0); y < cursor; y++) {
-    const line = b.getLine(y)!;
-    const trim = !b.getLine(y + 1)?.isWrapped;
-    const [html, text] = [rowHtml(line, scratch, trim), line.translateToString(trim)];
-    if (line.isWrapped && card.html.length) {
-      card.html[card.html.length - 1] += html;
-      card.text[card.text.length - 1] += text;
-      continue;
-    }
-    if (y === outRow) card.outAt = card.html.length;
-    if (inputRow >= 0 && y > inputRow && text.trim()) extra = true;
-    card.html.push(html);
-    card.text.push(text);
-  }
-  while (card.text.length && !card.text.at(-1)!.trim()) (card.html.pop(), card.text.pop());
-  if (card.outAt < 0) card.outAt = card.text.length;
-  // Empty Enter, Ctrl+C: drop. Login (no prompt yet): keep.
-  const keep = l.ran ? !l.cleared : card.text.length && (!l.at || extra);
-  if (keep) cards.value = [...cards.value, card].slice(-MAX_CARDS);
-  term.clear();
-}
-
-/** `gap`: cell minus glyph width; overlays and cards letter-space by it to stay on grid. */
-const view = reactive({ y: 0, rowHeight: 0, cellWidth: 0, gap: 0, used: 0 });
-function usedRows() {
-  const b = term.buffer.active;
-  if (plain || b.type === "alternate" || b.baseY > 0) return term.rows;
-  for (let y = term.rows - 1; y > b.cursorY; y--)
-    if (b.getLine(y)?.translateToString(true)) return y + 1;
-  return b.cursorY + 1;
-}
+/** `gap`: cell minus glyph width; overlays letter-space by it to stay on grid. */
+const view = reactive({ y: 0, rowHeight: 0, cellWidth: 0, gap: 0 });
 // Cell size: screen box changes with it (resize, zoom, renderer swap). Observed, not read
 // on every write.
 const screen = shallowRef<HTMLElement | null>(null);
@@ -260,50 +163,17 @@ useResizeObserver(screen, ([e]) => {
   view.cellWidth = e!.contentRect.width / term.cols;
   view.gap = view.cellWidth - glyph;
 });
-/** Overlay at cell x, y (buffer row): on terminal's grid. */
+/** Overlay at cell x, buffer row y. */
 const cellStyle = (x: number, y: number) => ({
   left: `${x * view.cellWidth}px`,
   top: `${(y - view.y) * view.rowHeight}px`,
   lineHeight: `${view.rowHeight}px`,
   letterSpacing: `${view.gap}px`,
 });
-function measure() {
-  view.y = term.buffer.active.viewportY;
-  view.used = usedRows();
-}
+const measure = () => (view.y = term.buffer.active.viewportY);
 term.onScroll(measure);
 term.onResize(measure);
-term.onWriteParsed(measure); // xterm stops painting while scrolled out of view
-
-// Scroll anchoring off: it moved scroll as cards settled, read as user scroll.
-let stick = true;
-const onScroll = () => {
-  const s = scroller.value!;
-  stick = s.scrollHeight - s.scrollTop - s.clientHeight < 8;
-};
-const follow = () =>
-  stick &&
-  nextTick(() => scroller.value && (scroller.value.scrollTop = scroller.value.scrollHeight));
-
-// Growth at bottom (cards, lazy card height, rows) keeps prompt in view.
-const content = useTemplateRef("content");
-useResizeObserver(content, follow);
-/** Rows fill scroller minus padding (blocks: header, border). */
-const paneHeight = ref(0);
-const fitPane = () =>
-  scroller.value && (paneHeight.value = scroller.value.clientHeight - (plain ? 24 : 62));
-useResizeObserver(scroller, fitPane);
 const refocus = () => getSelection()?.toString() || term.focus();
-
-const clock = (ms: number) =>
-  new Date(ms).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-const copy = (text: string, what: string) =>
-  copyText(text, `Copied the ${what}`).then(() => term.focus());
-
-function took(ms: number) {
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
-}
 
 const SETUP = (() => {
   // Comments stay out of typed line, except first: session script looks for it in history.
@@ -315,7 +185,7 @@ const SETUP = (() => {
   return ` [ -n "$BASH_VERSION$ZSH_VERSION" ] && eval "$(printf %s '${btoa(script)}' | base64 -d)"\r`;
 })();
 let setup: "wait" | "hidden" | "done" =
-  settings.terminalStyle !== "raw" && !props.target.command ? "wait" : "done";
+  settings.setupLine && !props.target.command ? "wait" : "done";
 let timer: ReturnType<typeof setTimeout> | undefined;
 let held = "";
 let typedAhead = "";
@@ -359,8 +229,7 @@ function finishSetup(rest: string, promptLines?: number) {
   typedAhead = "";
 }
 
-// Host card stays up during login output (else rows grow, then jump into card): until first
-// prompt, login question, or 4s.
+// Host card stays up during login output: until first prompt, login question, or 4s.
 const ready = ref(false);
 let readyTimer: ReturnType<typeof setTimeout> | undefined;
 function reveal() {
@@ -441,13 +310,11 @@ function updateGhost() {
   const b = term.buffer.active;
   ghost.left = b.cursorX * view.cellWidth;
   ghost.top = b.cursorY * view.rowHeight;
-  const box = scroller.value?.getBoundingClientRect();
-  ghost.below =
-    !box || screen.value.getBoundingClientRect().top + ghost.top - box.top < box.height / 2;
+  ghost.below = ghost.top < (el.value?.clientHeight ?? 0) / 2;
 }
 
 function accept(i = ghost.pick) {
-  const text = ghost.list[i]?.text.slice(ghost.line.length + pending.text.length);
+  const text = ghost.list[i]?.text.slice(ghost.line.length);
   if (!text || id === undefined) return;
   ghost.list = [];
   if (!integrated.value) typed += text;
@@ -575,13 +442,12 @@ const dectcem = (hidden: boolean) => (params: (number | number[])[]) => {
 term.parser.registerCsiHandler({ prefix: "?", final: "h" }, dectcem(false));
 term.parser.registerCsiHandler({ prefix: "?", final: "l" }, dectcem(true));
 
-// Overlays move after xterm paints: else text and cursor disagree a frame (jitter typing fast).
+// Overlays move after xterm paints: else text, cursor disagree one frame (jitter typing fast).
 term.onRender(() => {
   echo.settle();
   placeCaret();
   updateGhost();
   measure();
-  follow();
 });
 
 term.onData((data) => {
@@ -589,7 +455,6 @@ term.onData((data) => {
   if (setup === "hidden") return void (typedAhead += data);
   echo.key(data);
   placeCaret();
-  stick = true;
   send(data);
 });
 term.onResize(({ cols, rows }) => {
@@ -619,7 +484,7 @@ async function open(trust?: string) {
       cols: term.cols,
       rows: term.rows,
       // New channel each try: Tauri unregisters one once Rust drops it (failed open, ended
-      // session), so a reused one gets nothing after trust or retry.
+      // session): reused one gets nothing after trust or retry.
       onData: new Channel<ArrayBuffer>(onData),
     });
     if (password.value && remember.value && saved.value) {
@@ -666,8 +531,6 @@ onMounted(async () => {
     document.fonts.load('13px "JetBrains Mono"'),
     document.fonts.load('13px "Symbols Nerd Font Mono"', "\ue0b0"),
   ]);
-  fitPane();
-  await nextTick();
   const ctx = document.createElement("canvas").getContext("2d")!;
   ctx.font = `${term.options.fontSize}px ${term.options.fontFamily}`;
   glyph = ctx.measureText("W").width;
@@ -676,7 +539,7 @@ onMounted(async () => {
   // GPU renderer; xterm's DOM one when WebGL missing or lost (too many tabs, driver reset).
   // WebGL cells are whole device pixels rounded down (7.8px glyph: 7px, squeezed): letter
   // spacing rounds up instead. ponytail: set once; window moved to other display scale may be
-  // a device pixel wide, re-set on resolution change if it shows.
+  // one device pixel off, re-set on resolution change if it shows.
   try {
     const gpu = new WebglAddon();
     gpu.onContextLoss(() => {
@@ -789,7 +652,7 @@ onBeforeUnmount(() => {
         color="neutral"
         variant="subtle"
         icon="i-ph-rows-duotone"
-        title="Turn on command blocks here?"
+        title="Turn on shell integration here?"
         description="Lynxterm couldn't spot a shell prompt, so it didn't type its setup line. Turn on only if a shell is waiting for a command."
         :actions="[
           { label: 'Turn on', color: 'primary', onClick: () => typeSetup('\x15') },
@@ -798,175 +661,98 @@ onBeforeUnmount(() => {
       />
     </div>
     <div
-      ref="scroller"
-      class="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3 [overflow-anchor:none]"
+      class="flex min-h-0 flex-1 flex-col px-4 py-3"
       :class="cover ? 'invisible' : 'animate-fade'"
-      :style="{ '--row': `${view.rowHeight || 24}px`, '--gap': `${view.gap}px` }"
-      @scroll="onScroll"
       @mouseup="refocus"
     >
-      <div ref="content" class="flex shrink-0 flex-col gap-2">
-        <template v-if="!alternate">
-          <section
-            v-for="c in cards"
-            :key="c.id"
-            class="group shrink-0 card [contain-intrinsic-size:auto_96px] [content-visibility:auto]"
-            :class="c.status && 'border-error/40'"
+      <div class="relative min-h-0 flex-1">
+        <!-- FitAddon measures el -->
+        <div ref="el" class="absolute inset-0" />
+        <UButton
+          v-if="closable"
+          icon="i-ph-x"
+          size="xs"
+          variant="ghost"
+          aria-label="Close this pane"
+          class="absolute top-0 right-0 z-30"
+          @click="emit('close')"
+        />
+        <span
+          v-if="echoing"
+          aria-hidden="true"
+          class="pointer-events-none absolute right-0 bg-default font-mono text-[13px] whitespace-pre text-muted"
+          :style="{ ...cellStyle(pending.x, pending.y), height: `${view.rowHeight}px` }"
+          >{{ pending.text }}</span
+        >
+        <span
+          v-if="rest && !waiting"
+          aria-hidden="true"
+          class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-dimmed"
+          :style="cellStyle(caret.x, caret.y)"
+          >{{ rest }}</span
+        >
+        <span
+          v-if="waiting"
+          aria-hidden="true"
+          class="lt-late pointer-events-none absolute flex items-center"
+          :style="{ ...cellStyle(caret.x + 1, caret.y), height: `${view.rowHeight}px` }"
+        >
+          <UIcon name="i-ph-circle-notch" class="size-3 animate-spin text-dimmed" />
+        </span>
+        <!-- whole pixels via transform: fractional `left` leaves stray pixel in WebKitGTK -->
+        <span
+          v-if="
+            state === 'open' && !caret.hidden && caret.y >= view.y && caret.y < view.y + term.rows
+          "
+          aria-hidden="true"
+          class="pointer-events-none absolute top-0 left-0 w-0.5 bg-primary will-change-transform"
+          :class="[caret.idle && caret.focused && 'lt-blink', !caret.focused && 'opacity-40']"
+          :style="{
+            transform: `translate(${Math.round(caret.x * view.cellWidth)}px, ${Math.round((caret.y - view.y + 0.15) * view.rowHeight)}px)`,
+            height: `${Math.round(view.rowHeight * 0.7)}px`,
+            transition: caret.glide ? 'transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+          }"
+        />
+        <!-- mousedown.prevent keeps focus in terminal -->
+        <ul
+          v-if="menu"
+          role="listbox"
+          aria-label="Suggestions"
+          class="absolute z-10 w-max max-w-md overflow-hidden rounded-md border border-default bg-elevated py-1 font-mono text-xs shadow-lg"
+          :style="{
+            left: `max(0px, min(${ghost.left - word.length * view.cellWidth}px, 100% - 28rem))`,
+            ...(ghost.below
+              ? { top: `${ghost.top + view.rowHeight + 2}px` }
+              : { bottom: `calc(100% - ${ghost.top - 2}px)` }),
+          }"
+        >
+          <li
+            v-for="(item, i) in ghost.list"
+            :key="item.text"
+            role="option"
+            :aria-selected="i === ghost.pick"
+            class="flex cursor-pointer gap-4 px-2.5 py-1"
+            :class="i === ghost.pick ? 'bg-accented text-default' : 'text-muted'"
+            @mousedown.prevent="accept(i)"
+            @mousemove="ghost.pick = i"
           >
-            <header v-if="c.command !== undefined" class="card-head">
-              <span v-if="c.status !== undefined" :class="c.status ? 'text-error' : 'text-success'">
-                exit {{ c.status }}
-              </span>
-              <span v-if="(c.ms ?? 0) >= 1000">{{ took(c.ms!) }}</span>
-              <span v-if="c.start">{{ clock(c.start) }}</span>
-              <span v-if="c.cwd" class="truncate">{{ c.cwd }}</span>
-              <span v-if="c.branch" class="flex min-w-0 items-center gap-1">
-                <UIcon name="i-ph-git-branch-duotone" class="size-3.5 shrink-0" />
-                <span class="truncate">{{ c.branch }}</span>
-              </span>
-              <span class="ml-auto hidden gap-3 group-hover:flex">
-                <button class="hover:text-default" @click="copy(c.command, 'command')">
-                  copy command
-                </button>
-                <button
-                  v-if="c.outAt < c.text.length"
-                  class="hover:text-default"
-                  @click="copy(c.text.slice(c.outAt).join('\n'), 'output')"
-                >
-                  copy output
-                </button>
-              </span>
-            </header>
-            <!-- safe: rowHtml escapes text, styles its own -->
-            <div
-              class="lt-out px-3 pb-2"
-              :class="c.command === undefined && 'pt-2'"
-              v-html="c.html.join('\n')"
-            />
-          </section>
-        </template>
-
-        <section class="relative shrink-0" :class="!plain && 'card'">
-          <UButton
-            v-if="plain && closable"
-            icon="i-ph-x"
-            size="xs"
-            variant="ghost"
-            aria-label="Close this pane"
-            class="absolute top-0 right-0 z-30"
-            @click="emit('close')"
-          />
-          <header v-if="!plain" class="card-head">
-            <span v-if="state === 'connecting'" class="text-primary">connecting…</span>
-            <span v-else-if="state === 'closed'">disconnected</span>
-            <span v-else-if="live.ran && live.status === undefined" class="text-primary">
-              running
+            <span class="min-w-0 flex-auto truncate">
+              <span class="text-primary">{{ word }}</span
+              >{{ item.text.slice(ghost.line.length) }}
             </span>
-            <span class="truncate">{{ cwd || hostLabel(target) }}</span>
-            <span v-if="live.branch" class="flex min-w-0 items-center gap-1">
-              <UIcon name="i-ph-git-branch-duotone" class="size-3.5 shrink-0" />
-              <span class="truncate">{{ live.branch }}</span>
-            </span>
-            <UButton
-              v-if="closable"
-              icon="i-ph-x"
-              size="xs"
-              variant="ghost"
-              aria-label="Close this pane"
-              class="-my-1 ml-auto"
-              @click="emit('close')"
-            />
-          </header>
-          <!-- full pane rows (FitAddon measures el), shown only as far as used -->
-          <div
-            class="relative"
-            :class="!plain && 'mx-3 mb-2'"
-            :style="{ height: `${view.used * view.rowHeight}px` }"
+            <span v-if="item.hint" class="max-w-60 truncate text-dimmed">{{ item.hint }}</span>
+          </li>
+          <li
+            aria-hidden="true"
+            class="border-t border-default px-2.5 pt-1 text-[11px] text-dimmed"
           >
-            <div class="absolute inset-x-0 top-0 h-full overflow-hidden">
-              <div ref="el" :style="{ height: `${paneHeight}px` }" />
-            </div>
-            <span
-              v-if="echoing"
-              aria-hidden="true"
-              class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-muted"
-              :style="cellStyle(pending.x, pending.y)"
-              >{{ pending.text }}</span
-            >
-            <span
-              v-if="rest && !waiting && (echoing || !pending.text)"
-              aria-hidden="true"
-              class="pointer-events-none absolute font-mono text-[13px] whitespace-pre text-dimmed"
-              :style="cellStyle(caret.x, caret.y)"
-              >{{ rest }}</span
-            >
-            <span
-              v-if="waiting"
-              aria-hidden="true"
-              class="lt-late pointer-events-none absolute flex items-center"
-              :style="{ ...cellStyle(caret.x + 1, caret.y), height: `${view.rowHeight}px` }"
-            >
-              <UIcon name="i-ph-circle-notch" class="size-3 animate-spin text-dimmed" />
+            <span class="flex items-center gap-1.5">
+              <UKbd value="arrowup" /><UKbd value="arrowdown" /> pick
+              <UKbd value="arrowright" class="ms-1.5" /> accept
+              <UKbd value="escape" class="ms-1.5" /> close
             </span>
-            <!-- whole pixels via transform: fractional `left` leaves stray pixel in WebKitGTK -->
-            <span
-              v-if="
-                state === 'open' &&
-                !caret.hidden &&
-                caret.y >= view.y &&
-                caret.y < view.y + term.rows
-              "
-              aria-hidden="true"
-              class="pointer-events-none absolute top-0 left-0 w-0.5 bg-primary will-change-transform"
-              :class="[caret.idle && caret.focused && 'lt-blink', !caret.focused && 'opacity-40']"
-              :style="{
-                transform: `translate(${Math.round(caret.x * view.cellWidth)}px, ${Math.round((caret.y - view.y + 0.15) * view.rowHeight)}px)`,
-                height: `${Math.round(view.rowHeight * 0.7)}px`,
-                transition: caret.glide ? 'transform 90ms cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
-              }"
-            />
-            <!-- mousedown.prevent keeps focus in terminal -->
-            <ul
-              v-if="menu"
-              role="listbox"
-              aria-label="Suggestions"
-              class="absolute z-10 w-max max-w-md overflow-hidden rounded-md border border-default bg-elevated py-1 font-mono text-xs shadow-lg"
-              :style="{
-                left: `max(0px, min(${ghost.left - word.length * view.cellWidth}px, 100% - 28rem))`,
-                ...(ghost.below
-                  ? { top: `${ghost.top + view.rowHeight + 2}px` }
-                  : { bottom: `calc(100% - ${ghost.top - 2}px)` }),
-              }"
-            >
-              <li
-                v-for="(item, i) in ghost.list"
-                :key="item.text"
-                role="option"
-                :aria-selected="i === ghost.pick"
-                class="flex cursor-pointer gap-4 px-2.5 py-1"
-                :class="i === ghost.pick ? 'bg-accented text-default' : 'text-muted'"
-                @mousedown.prevent="accept(i)"
-                @mousemove="ghost.pick = i"
-              >
-                <span class="min-w-0 flex-auto truncate">
-                  <span class="text-primary">{{ word }}</span
-                  >{{ item.text.slice(ghost.line.length) }}
-                </span>
-                <span v-if="item.hint" class="max-w-60 truncate text-dimmed">{{ item.hint }}</span>
-              </li>
-              <li
-                aria-hidden="true"
-                class="border-t border-default px-2.5 pt-1 text-[11px] text-dimmed"
-              >
-                <span class="flex items-center gap-1.5">
-                  <UKbd value="arrowup" /><UKbd value="arrowdown" /> pick
-                  <UKbd value="arrowright" class="ms-1.5" /> accept
-                  <UKbd value="escape" class="ms-1.5" /> close
-                </span>
-              </li>
-            </ul>
-          </div>
-        </section>
+          </li>
+        </ul>
       </div>
     </div>
   </div>

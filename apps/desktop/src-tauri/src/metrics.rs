@@ -64,7 +64,16 @@ fn script(action: &str) -> Result<String, String> {
 pub struct Watched(Mutex<HashMap<String, Arc<Handle>>>);
 
 impl Watched {
-    pub async fn handle(&self, vault: &Vault, host_id: &str) -> Result<Arc<Handle>, String> {
+    pub async fn pick(
+        &self,
+        sessions: &Sessions,
+        vault: &Vault,
+        session: Option<u32>,
+        host_id: &str,
+    ) -> Result<Arc<Handle>, String> {
+        if let Some(id) = session {
+            return sessions.handle(id);
+        }
         let open = self.0.lock().unwrap().get(host_id).cloned();
         if let Some(handle) = open.filter(|h| !h.is_closed()) {
             return Ok(handle);
@@ -75,19 +84,6 @@ impl Watched {
             .unwrap()
             .insert(host_id.into(), handle.clone());
         Ok(handle)
-    }
-
-    pub async fn pick(
-        &self,
-        sessions: &Sessions,
-        vault: &Vault,
-        session: Option<u32>,
-        host_id: &str,
-    ) -> Result<Arc<Handle>, String> {
-        match session {
-            Some(id) => sessions.handle(id),
-            None => self.handle(vault, host_id).await,
-        }
     }
 
     pub fn forget(&self, host_id: &str) {

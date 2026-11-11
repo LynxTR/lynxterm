@@ -71,7 +71,9 @@ const checks = computed(() => {
     >
       <div class="flex min-w-0 flex-col gap-1">
         <span class="t-label">Your worker</span>
-        <span class="truncate font-mono text-[13px]">{{ host }}</span>
+        <CopyText :text="url" what="Worker URL" class="truncate font-mono text-[13px]">{{
+          host
+        }}</CopyText>
       </div>
       <div class="flex flex-col gap-1">
         <span class="t-label">Last sync</span>

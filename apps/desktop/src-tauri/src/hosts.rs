@@ -22,7 +22,7 @@ pub struct Host {
     pub os: String,
     #[serde(default)]
     pub tags: Vec<String>,
-    /// Kept only when user saves it. Never sent to frontend.
+    /// Kept only when user saves it. Never in hosts_list.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub password: String,
     /// hosts_list only, instead of password.
@@ -87,16 +87,13 @@ pub fn host_password_save(
     vault.with(|v| v.put(&id, KIND, &h))
 }
 
-/// Only path saved password reaches frontend. Needs master password again, like key_export.
+/// Only path saved password reaches frontend.
 #[tauri::command]
-pub async fn host_password_reveal(
+pub fn host_password_reveal(
     vault: State<'_, Vault>,
     host: String,
     port: u16,
     user: String,
-    master: String,
 ) -> Result<String, String> {
-    let header = vault.with(|v| Ok(v.header().clone()))?;
-    header.open(&master)?;
     saved_password(&vault, &host, port, &user)
 }

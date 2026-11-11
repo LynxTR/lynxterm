@@ -1,4 +1,4 @@
-// Lynxterm vault server: stores ciphertext and revisions, never a key. Items encrypted on device.
+// Lynxterm vault server: stores ciphertext and revisions, never keys. Items encrypted on device.
 
 interface Env {
   DB: D1Database;
@@ -22,7 +22,7 @@ INSERT OR IGNORE INTO meta VALUES ('head', 0), ('failed', 0), ('failed_at', 0)`;
 const PAGE = 500;
 
 // Sent on every response as Lynxterm-Worker. App stops syncing on mismatch, names side to update.
-// Bump with WORKER_VERSION in app sync.rs on any change one side needs the other to have.
+// Bump with WORKER_VERSION in app sync.rs on any change other side must have.
 const VERSION = 1;
 
 // Wrong passwords per address, fail2ban style: first FREE_TRIES free, each later one bans for
@@ -111,7 +111,7 @@ async function attempt(env: Env, ip: string): Promise<{ wait: number } | { ban: 
   const fails = row && now - row.until < FORGET_MS ? row.fails + 1 : 1;
   const step = Math.min(fails - FREE_TRIES, BAN_MINUTES.length);
   const ban = step > 0 ? BAN_MINUTES[step - 1]! * 60_000 : 0;
-  // Only if no other request from this address counted a try in between.
+  // Only if no other request from this address counted try in between.
   const { meta: written } = await env.DB.prepare(
     `INSERT INTO tries (ip, fails, until) VALUES (?1, ?2, ?3)
      ON CONFLICT (ip) DO UPDATE SET fails = ?2, until = ?3 WHERE fails = ?4`,

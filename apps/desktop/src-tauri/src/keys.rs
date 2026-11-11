@@ -103,16 +103,12 @@ pub fn key_generate(vault: State<'_, Vault>, name: String) -> Result<String, Str
     Ok(id)
 }
 
-/// Needs master password again.
 #[tauri::command]
 pub async fn key_export(
     app: AppHandle,
     vault: State<'_, Vault>,
     id: String,
-    password: String,
 ) -> Result<String, String> {
-    let header = vault.with(|v| Ok(v.header().clone()))?;
-    header.open(&password)?; // proves owner still at keyboard
     let stored: StoredKey = vault.with(|v| v.get(&id))?;
 
     let dir = app.path().download_dir().map_err(err)?;

@@ -1,4 +1,4 @@
-// Spec generators and other functions never run: they execute commands, here on the server.
+// Spec generators, other functions never run: they execute commands, here on server.
 
 type Named = { name: string | string[]; description?: string; hidden?: boolean; priority?: number };
 type Arg = { suggestions?: (string | Named)[]; isOptional?: boolean };

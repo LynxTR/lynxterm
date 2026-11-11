@@ -1,5 +1,5 @@
 // Setup typed only at shell prompt. Login may still ask (Hetzner forced password change,
-// sudo, profile passphrase): setup line would become the answer.
+// sudo, profile passphrase): setup line would become answer.
 const ASKING = /password|passphrase|yes\/no|'yes'|^(Enter|Allow) /i;
 const PROMPT = /[$#%>❯│⟫»▶λ→] $/;
 

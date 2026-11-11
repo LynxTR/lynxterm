@@ -6,8 +6,7 @@ const defaults = {
   checkUpdates: true,
   history: true,
   localEcho: true,
-  /** raw: plain, no hooks typed */
-  terminalStyle: "blocks" as "blocks" | "plain" | "raw",
+  setupLine: true,
   syncEvery: { hosts: 5, snippets: 60, services: 60, history: 1440, activity: 60 } as Record<
     string,
     number
@@ -23,15 +22,18 @@ const defaults = {
   },
 };
 
-// Settings added in later versions, rules included, get their defaults.
+// Later-added settings, rules too, get defaults.
 const settings = useLocalStorage("lynxterm:settings", defaults, {
   mergeDefaults: (saved, d) => {
-    // Old `blocks: false` = raw. Key dropped: migrates once.
-    const { blocks, ...rest } = saved as typeof saved & { blocks?: boolean };
+    // Old `blocks: false`, `terminalStyle: "raw"` = no setup line. Keys dropped: migrate once.
+    const { blocks, terminalStyle, ...rest } = saved as typeof saved & {
+      blocks?: boolean;
+      terminalStyle?: string;
+    };
     return {
       ...d,
       ...rest,
-      ...(blocks === false && { terminalStyle: "raw" as const }),
+      ...((blocks === false || terminalStyle === "raw") && { setupLine: false }),
       monitoring: {
         ...d.monitoring,
         ...rest.monitoring,
@@ -44,7 +46,7 @@ const settings = useLocalStorage("lynxterm:settings", defaults, {
 export const useSettings = () => settings;
 
 /** Default for key hosts; password hosts can't
- *  log in in background, so report only from a terminal. */
+ *  log in in background, so report only from terminal. */
 export const isWatched = (h: { id?: string; keyId?: string }) =>
   !!h.keyId && !settings.unwatchedHosts.includes(h.id!);
 export const setWatched = (h: { id?: string }, on: boolean) => setIn("unwatchedHosts", h.id!, !on);

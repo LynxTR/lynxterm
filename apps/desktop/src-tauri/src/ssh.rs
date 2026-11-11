@@ -51,7 +51,7 @@ impl client::Handler for Client {
     type Error = russh::Error;
 
     // Known host must match ~/.ssh/known_hosts; changed key refused.
-    // New host accepted only if fingerprint is the user-approved one.
+    // New host accepted only with user-approved fingerprint.
     async fn check_server_key(
         &mut self,
         key: &PublicKeyOrCertificate,
@@ -173,7 +173,7 @@ pub async fn exec(session: &Handle, script: &str) -> Result<String, String> {
     Ok(output)
 }
 
-/// Script goes to `sh` on stdin, so it works whatever the login shell (even fish).
+/// Script goes to `sh` on stdin: works whatever login shell (even fish).
 pub async fn exec_status(session: &Handle, script: &str) -> Result<(u32, String), String> {
     let mut channel = session.channel_open_session().await.map_err(describe)?;
     channel.exec(true, "sh -s").await.map_err(describe)?;

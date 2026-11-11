@@ -1,5 +1,6 @@
 // Editor line numbers match this file, so sh errors point at right line.
-import { escapeHtml } from "./termHtml";
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 export const SERVICE_FUNCTIONS = [
   {
@@ -90,8 +91,8 @@ export function serviceFile(s: Code) {
 const heredocStart = (line: string) =>
   line.includes("<<<") ? "" : (line.match(/<<-?\s*['"]?(\w+)/)?.[1] ?? "");
 
-/** Function runs from `name() {` to first `}` at line start, heredoc text
- *  skipped (a JSON `}` there is not the end). */
+/** Function: `name() {` to first `}` at line start, heredoc text skipped (JSON `}` there
+ *  not end). */
 export function parseServiceFile(text: string): Code | { error: string; line: number } {
   const lines = text.split("\n");
   let i = lines[0] === SHARED_LINE ? 1 : 0;
@@ -172,7 +173,7 @@ const RULES: Rule[] = [
   { test: /<<</, error: "<<< is bash only: pipe printf into it" },
   { test: /\becho\s+-e\b/, error: "echo -e differs between shells: use printf" },
   {
-    // Single [ only: [[ ]] has its own warning, and == there is a pattern match.
+    // Single [ only: [[ ]] has own warning, == there is pattern match.
     test: /(^|[^[])\[\s[^\]]*\s==\s/,
     error: "== in [ ] is bash only: use =",
     fix: (l) => l.replace(/(^|[^[])(\[\s[^\]]*\s)==(\s)/g, "$1$2=$3"),
@@ -200,11 +201,11 @@ export function lintServiceFile(text: string) {
       if (line.trim() === heredoc) heredoc = "";
       return;
     }
-    // Any function, shared helpers too: exit there ends the run as well.
+    // Any function, shared helpers too: exit there ends run too.
     if (/^\s*\w+\s*\(\)\s*\{/.test(line)) inFunction = true;
     else if (line === "}") inFunction = false;
     const comment = line.trimStart().startsWith("#");
-    // Single-quoted text is data (an awk program's exit, a sed pattern), not shell.
+    // Single-quoted text is data (awk exit, sed pattern), not shell.
     const code = line.replace(/'[^']*'/g, "''");
     for (const rule of RULES) {
       if (comment && rule !== TRAILING) continue;
@@ -224,7 +225,7 @@ export function applyFix(text: string, w: LintWarning) {
   return lines.join("\n");
 }
 
-/** Every safe fix, one at a time, so fixes on one line stack. */
+/** Every safe fix, one at a time: fixes on one line stack. */
 export function fixServiceFile(text: string) {
   const next = (t: string) => lintServiceFile(t).find((w) => w.fixed !== undefined);
   for (let w = next(text); w; w = next(text)) text = applyFix(text, w);
@@ -255,7 +256,7 @@ export function highlightSh(code: string) {
   let html = "";
   let last = 0;
   for (let m; (m = re.exec(code));) {
-    // # starts a comment only at line start or after space or ;, else it's text (a#b).
+    // # starts comment only at line start or after space or ;, else text (a#b).
     if (m[1] && m.index > 0 && !/[\s;]/.test(code[m.index - 1]!)) {
       re.lastIndex = m.index + 1;
       continue;

@@ -87,30 +87,10 @@ async function purge(key: string, name = "") {
         label="Learn from command history"
         description="Commands you run feed the grey → suggestions, per host. Stored encrypted in your vault and synced. Lines starting with a space and password prompts are never saved."
       />
-      <URadioGroup
-        v-model="settings.terminalStyle"
-        legend="Terminal style"
-        description="Blocks and Plain type a short hidden setup line into each new bash or zsh session once it sees a shell prompt, never at a password or other login question; nothing is saved on the server. Applies to new terminals."
-        orientation="horizontal"
-        variant="card"
-        :items="[
-          {
-            label: 'Blocks',
-            value: 'blocks',
-            description:
-              'Each finished command becomes its own card with folder, git branch, exit status and time.',
-          },
-          {
-            label: 'Plain',
-            value: 'plain',
-            description: 'One continuous terminal, like any other. Suggestions still work.',
-          },
-          {
-            label: 'Raw',
-            value: 'raw',
-            description: 'Plain, with no setup line. Suggestions follow only what you type.',
-          },
-        ]"
+      <USwitch
+        v-model="settings.setupLine"
+        label="Type a setup line into new sessions"
+        description="A short hidden line in each new bash or zsh session, once it sees a shell prompt, never at a password or other login question, so suggestions read exactly what you typed. Nothing is saved on the server. Off: suggestions follow only what you type. Applies to new terminals."
       />
       <USwitch
         v-model="settings.localEcho"
@@ -125,8 +105,8 @@ async function purge(key: string, name = "") {
         <p class="text-sm text-muted">
           Adds a small block to <code class="font-mono text-xs">~/.bashrc</code> and
           <code class="font-mono text-xs">~/.zshrc</code> on the server. It marks where your prompt
-          ends and tells Lynxterm the current folder, so suggestions read exactly what you typed and
-          the status bar shows where you are. Nothing else changes; Remove takes it out again.
+          ends, so suggestions read exactly what you typed. Nothing else changes; Remove takes it
+          out again.
         </p>
       </div>
       <ul class="divide-y divide-default">

@@ -1,4 +1,5 @@
 const fieldSize = { sm: { base: "px-3 py-2 text-[13px]/4" }, md: { base: "px-3 py-2 text-sm/5" } };
+const icon18 = { leadingIcon: "size-[18px]", trailingIcon: "size-[18px]" };
 
 export default defineAppConfig({
   icon: {
@@ -30,16 +31,8 @@ export default defineAppConfig({
         size: {
           xs: { base: "px-2.5 py-1.5 text-xs gap-1.5" },
           sm: { base: "px-3 py-2 text-[13px]/4 gap-1.5" },
-          md: {
-            base: "px-3.5 py-2 text-sm gap-2",
-            leadingIcon: "size-[18px]",
-            trailingIcon: "size-[18px]",
-          },
-          lg: {
-            base: "px-4 py-2.5 text-sm gap-2",
-            leadingIcon: "size-[18px]",
-            trailingIcon: "size-[18px]",
-          },
+          md: { base: "px-3.5 py-2 text-sm gap-2", ...icon18 },
+          lg: { base: "px-4 py-2.5 text-sm gap-2", ...icon18 },
         },
       },
       compoundVariants: [
@@ -69,19 +62,7 @@ export default defineAppConfig({
     dashboardResizeHandle: { base: "block" },
     dashboardSidebarCollapse: { base: "flex" },
     dashboardSearchButton: { slots: { trailing: "flex" } },
-    // Fields match button heights: sm 32px, md 36px.
-    input: {
-      variants: {
-        size: {
-          sm: { base: "px-3 py-2 text-[13px]/4" },
-          md: {
-            base: "px-3 py-2 text-sm/5",
-            leadingIcon: "size-[18px]",
-            trailingIcon: "size-[18px]",
-          },
-        },
-      },
-    },
+    input: { variants: { size: { sm: fieldSize.sm, md: { ...fieldSize.md, ...icon18 } } } },
     select: { variants: { size: fieldSize } },
     selectMenu: { variants: { size: fieldSize } },
   },

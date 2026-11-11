@@ -25,8 +25,8 @@ const FUNCTIONS: [&str; 8] = [
 ];
 /// Quick, read-only: run without terminal. Rest need one (sudo, following logs).
 const BACKGROUND: [&str; 3] = ["detect", "preflight", "check"];
-/// Bundled services (/services) by file name; their ids are builtin:<name>. The frontend
-/// bundles the same folder; a test keeps this list matching it.
+/// Bundled services (/services) by file name, id builtin:<name>. Frontend bundles same folder;
+/// test keeps list matching.
 const BUILTIN: [(&str, &str); 7] = [
     ("bun", include_str!("../../../../services/bun.sh")),
     ("deno", include_str!("../../../../services/deno.sh")),
@@ -37,7 +37,7 @@ const BUILTIN: [(&str, &str); 7] = [
     ("ssh", include_str!("../../../../services/ssh.sh")),
 ];
 
-/// Kept apart so editor locks function lines; assembled into a file when run.
+/// Kept apart so editor locks function lines; assembled into file when run.
 #[derive(Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Service {
@@ -74,7 +74,7 @@ pub fn service_check(script: String) -> Result<Option<String>, String> {
     Ok((!out.status.success()).then(|| stderr.lines().next().unwrap_or("").to_owned()))
 }
 
-/// What a script sees as LYNXTERM_AUTH.
+/// Script sees as LYNXTERM_AUTH.
 fn auth_ok(auth: &str) -> Result<(), String> {
     match auth {
         "publickey" | "password" => Ok(()),
@@ -97,9 +97,8 @@ fn file(s: &Service) -> String {
     lines.join("\n")
 }
 
-/// Script text and a file name for a service id: a built-in's bundled file, or an own one
-/// from the vault. Anything else is refused, so an id never reaches a path or the vault
-/// unchecked.
+/// Script text and file name for service id: built-in's bundled file or own one from vault.
+/// Anything else refused: id never reaches path or vault unchecked.
 fn script_for(vault: &Vault, id: &str) -> Result<(String, String), String> {
     if let Some(name) = id.strip_prefix("builtin:") {
         let (_, text) = BUILTIN
@@ -115,7 +114,7 @@ fn script_for(vault: &Vault, id: &str) -> Result<(String, String), String> {
     Ok((file(&service), id.to_owned()))
 }
 
-/// Built here, so only known functions and ids get in; `sh -c '...'` reads the same in every
+/// Built here: only known functions and ids get in; `sh -c '...'` reads same in every
 /// login shell, fish too.
 #[tauri::command]
 pub fn service_command(
@@ -163,8 +162,8 @@ pub async fn service_run(
     }
     auth_ok(&auth)?;
     let (text, _) = script_for(&vault, &service_id)?;
-    // fresh: connection opened now, never a reused one. Script sees LYNXTERM_FRESH and may
-    // take it as proof the server still lets this host in (ssh.sh undo timer).
+    // fresh: connection opened now, never reused. Script sees LYNXTERM_FRESH, may take it as
+    // proof server still lets this host in (ssh.sh undo timer).
     let (session, env) = if fresh {
         watched.forget(&host_id);
         (None, "export LYNXTERM_FRESH=1\n")

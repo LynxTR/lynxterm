@@ -310,8 +310,7 @@ pub fn new_id() -> String {
     HEXLOWER.encode(&<[u8; 16]>::generate())
 }
 
-/// An id from outside must be letters and digits: it names a vault entry and may name a file,
-/// so nothing else gets through.
+/// Outside id: letters and digits only. Names vault entry, maybe file.
 #[macro_export]
 macro_rules! kind_commands {
     ($list:ident, $save:ident($arg:ident): $ty:ident, $kind:expr) => {
